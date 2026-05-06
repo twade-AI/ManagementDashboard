@@ -17,7 +17,14 @@
     { id: 'finance',    label: 'Finance' },
   ];
 
-  const TopBar = ({ tab, setTab, filters, setFilters }) => (
+  const PERIOD_PILLS = [
+    { id: 'today', label: 'Today' },
+    { id: 'week',  label: 'Week'  },
+    { id: 'term',  label: 'Term'  },
+    { id: 'ytd',   label: 'YTD'   },
+  ];
+
+  const TopBar = ({ tab, setTab, filters, setFilters, period, setPeriod, showBenchmarks, setShowBenchmarks }) => (
     <div style={{ borderBottom: '1px solid var(--hb-rule)', background: 'var(--hb-card)', position: 'sticky', top: 0, zIndex: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 36px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -30,15 +37,30 @@
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--hb-mute)' }}>
             <span>Period:</span>
-            {['Today', 'Week', 'Term', 'YTD'].map(p => (
-              <button key={p} style={{
-                border: '1px solid var(--hb-rule)',
-                background: p==='Week' ? 'var(--hb-magenta)' : 'transparent',
-                color: p==='Week' ? '#fff' : 'var(--hb-ink-2)',
-                padding: '3px 10px', borderRadius: 999, fontSize: 11, cursor: 'pointer',
-              }}>{p}</button>
-            ))}
+            {PERIOD_PILLS.map(p => {
+              const on = period === p.id;
+              return (
+                <button key={p.id} onClick={() => setPeriod(p.id)} style={{
+                  border: '1px solid ' + (on ? 'var(--hb-magenta)' : 'var(--hb-rule)'),
+                  background: on ? 'var(--hb-magenta)' : 'transparent',
+                  color: on ? '#fff' : 'var(--hb-ink-2)',
+                  padding: '3px 10px', borderRadius: 999, fontSize: 11, cursor: 'pointer',
+                  fontFamily: 'inherit', fontWeight: on ? 700 : 500,
+                }}>{p.label}</button>
+              );
+            })}
           </div>
+          <button onClick={() => setShowBenchmarks(!showBenchmarks)} title="Overlay sector benchmarks on KPIs and charts"
+            style={{
+              border: '1px solid ' + (showBenchmarks ? 'var(--hb-magenta)' : 'var(--hb-rule)'),
+              background: showBenchmarks ? 'var(--hb-magenta-10)' : 'transparent',
+              color: showBenchmarks ? 'var(--hb-magenta)' : 'var(--hb-ink-2)',
+              padding: '4px 10px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
+              fontFamily: 'inherit', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: showBenchmarks ? 'var(--hb-magenta)' : 'var(--hb-mute)' }} />
+            Benchmarks {showBenchmarks ? 'on' : 'off'}
+          </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--hb-cream)', borderRadius: 999, fontSize: 11 }}>
             <span style={{width: 22, height: 22, borderRadius: 11, background: 'var(--hb-magenta)', color: '#fff', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize: 10, fontWeight: 700}}>MP</span>
             <span style={{ fontWeight: 600 }}>M. Preston</span>
@@ -65,7 +87,7 @@
   );
 
   // Big hero KPI — serif display
-  const HeroKPI = ({ label, value, unit, rag, delta, note, accent = 'var(--hb-magenta)' }) => (
+  const HeroKPI = ({ label, value, unit, rag, delta, note, accent = 'var(--hb-magenta)', benchmark }) => (
     <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', borderRadius: 3, padding: '22px 24px', borderTop: `3px solid ${accent}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
         <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', color: 'var(--hb-mute)', fontWeight: 700 }}>{label}</span>
@@ -79,27 +101,39 @@
         {delta ? <Delta {...delta} /> : <span>{note}</span>}
         {note && delta && <span>{note}</span>}
       </div>
+      {benchmark && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dotted var(--hb-rule)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 11, color: 'var(--hb-mute)' }}>
+          <span style={{ textTransform: 'uppercase', letterSpacing: '.08em', fontSize: 9.5, fontWeight: 700 }}>{benchmark.label}</span>
+          <span className="hb-mono" style={{ color: 'var(--hb-ink-2)', fontWeight: 600 }}>
+            {benchmark.value}{benchmark.unit || ''}
+          </span>
+        </div>
+      )}
     </div>
   );
 
   // Overview layout — 2×3 hero grid + lower panels
-  const Overview = ({ setTab }) => {
-    const a = D.admissions, ac = D.academic, p = D.pastoral, pe = D.people, f = D.finance;
+  const Overview = ({ setTab, period, showBenchmarks }) => {
+    const f = D.finance;
+    const periodData = D.periods[period] || D.periods.week;
+    const h = periodData.heroes;
+    const bm = D.benchmarks;
+    const b = (key) => showBenchmarks ? bm[key] : null;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
         {/* Hero strip: six critical metrics */}
         <div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 14 }}>
             <h2 className="hb-serif" style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-.01em' }}>The Morning Brief</h2>
-            <span style={{ fontSize: 12, color: 'var(--hb-mute)', fontStyle: 'italic', fontFamily: 'var(--font-serif)' }}>As of 08:30 · auto-refresh every 15 min</span>
+            <span style={{ fontSize: 12, color: 'var(--hb-mute)', fontStyle: 'italic', fontFamily: 'var(--font-serif)' }}>{periodData.label} · auto-refresh every 15 min</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-            <HeroKPI label="Pupils on roll" value={a.onRoll.value} rag="green" delta={{ value: +4, suffix: ' v bud' }} note="+12 v last year" />
-            <HeroKPI label="Attendance" value={p.attendance.value} unit="%" rag="green" delta={{ value: +0.2, suffix: ' v LY' }} note="Target 96.0%" accent="var(--hb-green)" />
-            <HeroKPI label="Projected net surplus" value="£2.5m" rag="green" delta={{ value: '+188', suffix: 'k v bud' }} note="Core £1.9m" accent="var(--hb-royal)" />
-            <HeroKPI label="IB average points" value={ac.projectedIB.value} rag="green" delta={{ value: +0.6, suffix: ' v LY' }} note="Max 45" />
-            <HeroKPI label="Oxbridge offers" value={`${ac.oxbridge.offers}`} rag="green" delta={{ value: '+4', suffix: ' v target' }} note={`${ac.oxbridge.applications} applications`} accent="var(--hb-royal)" />
-            <HeroKPI label="Safeguarding trained" value={pe.safeguarding.value} unit="%" rag="amber" delta={null} note="2 staff outstanding" accent="var(--hb-amber)" />
+            <HeroKPI label="Pupils on roll"        value={h.onRoll.value}       rag="green" delta={h.onRoll.delta}       note={h.onRoll.note}       benchmark={b('onRoll')} />
+            <HeroKPI label="Attendance"            value={h.attendance.value}   unit="%"  rag="green" delta={h.attendance.delta}   note={h.attendance.note}   accent="var(--hb-green)" benchmark={b('attendance')} />
+            <HeroKPI label="Projected net surplus" value={h.netSurplus.value}   rag="green" delta={h.netSurplus.delta}   note={h.netSurplus.note}   accent="var(--hb-royal)" benchmark={b('netSurplus')} />
+            <HeroKPI label="IB average points"     value={h.ibPoints.value}     rag="green" delta={h.ibPoints.delta}     note={h.ibPoints.note}     benchmark={b('ibPoints')} />
+            <HeroKPI label="Oxbridge offers"       value={`${h.oxbridge.value}`} rag="green" delta={h.oxbridge.delta}    note={h.oxbridge.note}     accent="var(--hb-royal)" benchmark={b('oxbridge')} />
+            <HeroKPI label="Safeguarding trained"  value={h.safeguarding.value} unit="%"  rag="amber" delta={h.safeguarding.delta} note={h.safeguarding.note} accent="var(--hb-amber)" benchmark={b('safeguarding')} />
           </div>
         </div>
 
@@ -144,9 +178,11 @@
           <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
               <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Cashflow — actual v forecast</h3>
-              <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>12mo rolling · £m</span>
+              <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>
+                12mo rolling · £m{showBenchmarks && <span style={{ marginLeft: 8, color: 'var(--hb-magenta)' }}>· sector overlay</span>}
+              </span>
             </div>
-            <AreaChart actual={f.cashflowTrend} forecast={f.budgetTrend} height={160} />
+            <AreaChart actual={f.cashflowTrend} forecast={f.budgetTrend} benchmark={showBenchmarks ? bm.cashflow : null} height={160} />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--hb-rule)' }}>
               <MiniStat label="EBITDA" value={`£${f.ebitda.actual}m`} sub={`v bud £${f.ebitda.budget}m`} rag="green" />
               <MiniStat label="Covenant cover" value={`${f.covenantCover.value}x`} sub={`covenant ${f.covenantCover.covenant}x`} rag="green" />
@@ -158,11 +194,11 @@
           {/* Activity feed */}
           <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)' }}>
             <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--hb-rule)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Activity today</h3>
-              <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>{D.feed.length} events</span>
+              <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Activity · {periodData.label.toLowerCase()}</h3>
+              <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>{periodData.feed.length} events</span>
             </div>
             <div style={{ maxHeight: 340, overflow: 'auto' }} className="hb-scroll">
-              {D.feed.map((ev, i) => (
+              {periodData.feed.map((ev, i) => (
                 <div key={i} style={{ padding: '12px 22px', borderTop: i===0?'none':'1px solid var(--hb-rule)', display: 'flex', gap: 10 }}>
                   <div style={{ flexShrink: 0, width: 36 }}>
                     <div className="hb-mono" style={{ fontSize: 11, color: 'var(--hb-mute)' }}>{ev.t}</div>
@@ -253,8 +289,8 @@
   );
 
   // Area chart (reused)
-  const AreaChart = ({ actual, forecast, height = 160 }) => {
-    const all = [...actual, ...forecast];
+  const AreaChart = ({ actual, forecast, benchmark, height = 160 }) => {
+    const all = [...actual, ...forecast, ...(benchmark || [])];
     const min = Math.min(...all), max = Math.max(...all);
     const range = max - min || 1;
     const W = 600, H = height;
@@ -271,6 +307,9 @@
         <path d={path(forecast)} fill="none" stroke="var(--hb-grey)" strokeWidth="1.5" strokeDasharray="4 4" />
         <path d={area(actual)} fill="var(--hb-magenta)" opacity=".15" />
         <path d={path(actual)} fill="none" stroke="var(--hb-magenta)" strokeWidth="2.5" />
+        {benchmark && (
+          <path d={path(benchmark)} fill="none" stroke="var(--hb-royal)" strokeWidth="1.75" strokeDasharray="6 3" opacity=".75" />
+        )}
       </svg>
     );
   };
@@ -529,11 +568,20 @@
   const ExecutiveBrief = () => {
     const [tab, setTab] = useState('overview');
     const [filters, setFilters] = useState(window.HBY.defaultFilters);
+    const [period, setPeriod] = useState('week');
+    const [showBenchmarks, setShowBenchmarks] = useState(false);
     return (
       <div style={{ width: '100%', height: '100%', background: 'var(--hb-paper)', overflow: 'auto', fontFamily: 'var(--font-sans)' }} className="hb-scroll">
-        <TopBar tab={tab} setTab={setTab} filters={filters} setFilters={setFilters} />
+        <TopBar
+          tab={tab} setTab={setTab}
+          filters={filters} setFilters={setFilters}
+          period={period} setPeriod={setPeriod}
+          showBenchmarks={showBenchmarks} setShowBenchmarks={setShowBenchmarks}
+        />
         <div style={{ padding: '28px 36px 60px' }}>
-          {tab === 'overview' ? <Overview setTab={setTab} /> : <SectionDeep tab={tab} />}
+          {tab === 'overview'
+            ? <Overview setTab={setTab} period={period} showBenchmarks={showBenchmarks} />
+            : <SectionDeep tab={tab} />}
         </div>
       </div>
     );
