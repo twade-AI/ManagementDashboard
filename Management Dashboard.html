@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Haileybury — Management Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<!-- Brand fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,700&family=Lato:wght@300;400;700;900&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  @font-face {
+    font-family: 'Calluna Sans';
+    src: url('fonts/CallunaSans-Light.otf') format('opentype');
+    font-weight: 300; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Calluna Sans';
+    src: url('fonts/CallunaSans-Regular.otf') format('opentype');
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Calluna Sans';
+    src: url('fonts/CallunaSans-Italic.otf') format('opentype');
+    font-weight: 400; font-style: italic; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Calluna Sans';
+    src: url('fonts/CallunaSans-Bold.otf') format('opentype');
+    font-weight: 700; font-style: normal; font-display: swap;
+  }
+  html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; font-family: 'Calluna Sans', 'Lato', 'Source Sans 3', system-ui, sans-serif; color: #1a1613; }
+  #root { height: 100%; }
+
+  /* Tweaks panel */
+  .tweaks-panel {
+    position: fixed; right: 16px; bottom: 16px; width: 280px;
+    background: #fff; border: 1px solid #e4ddd3; border-radius: 10px;
+    padding: 14px 16px; box-shadow: 0 12px 40px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.08);
+    z-index: 200; font-family: 'Lato', sans-serif; color: #1a1613;
+    display: none;
+  }
+  .tweaks-panel.open { display: block; }
+  .tweaks-panel h3 {
+    margin: 0 0 10px; font-family: 'Playfair Display', serif;
+    font-size: 15px; font-weight: 700; letter-spacing: -.01em;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .tweaks-panel .close { cursor: pointer; border: none; background: transparent; font-size: 18px; color: #6e665f; }
+  .tweak-row { margin-bottom: 10px; }
+  .tweak-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+    color: #6e665f; font-weight: 700; margin-bottom: 5px;
+  }
+  .tweak-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tweak-btns button {
+    border: 1px solid #e4ddd3; background: #fff; color: #3d3630;
+    padding: 4px 9px; font-size: 11px; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-weight: 500;
+  }
+  .tweak-btns button.on {
+    background: #9b1844; color: #fff; border-color: #9b1844;
+  }
+  .swatch-row { display: flex; gap: 6px; }
+  .swatch-row button {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid transparent; cursor: pointer; padding: 0;
+  }
+  .swatch-row button.on { border-color: #1a1613; }
+</style>
+
+<!-- Pinned React + Babel -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Data + primitives + variations -->
+<script src="data.js"></script>
+<script type="text/babel" src="primitives.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="variation-broadsheet.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="variation-executive.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="variation-controlroom.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="design-canvas.jsx" data-presets="env,react"></script>
+
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Tweaks defaults (host-persisted) -->
+<script>
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "magenta",
+  "density": "roomy",
+  "showRag": true,
+  "defaultFocus": "executive"
+}/*EDITMODE-END*/;
+</script>
+
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect } = React;
+
+// ────────────────────────────────────────────────────────────
+// Tweaks (inline panel, hidden unless host turns on edit mode)
+// ────────────────────────────────────────────────────────────
+const ACCENT_SWATCHES = {
+  magenta: { c: '#9b1844', name: 'Magenta' },
+  royal:   { c: '#2a2b7c', name: 'Royal'   },
+  green:   { c: '#009870', name: 'Green'   },
+  orange:  { c: '#ec6608', name: 'Orange'  },
+  blue:    { c: '#1e5b8a', name: 'Blue'    },
+};
+
+function TweaksPanel({ open, setOpen, tweaks, setTweaks }) {
+  const set = (k, v) => setTweaks(t => ({ ...t, [k]: v }));
+  return (
+    <div className={"tweaks-panel " + (open ? 'open' : '')}>
+      <h3>Tweaks <button className="close" onClick={() => setOpen(false)}>×</button></h3>
+
+      <div className="tweak-row">
+        <div className="tweak-label">Accent colour</div>
+        <div className="swatch-row">
+          {Object.entries(ACCENT_SWATCHES).map(([k, {c, name}]) => (
+            <button key={k} title={name}
+              className={tweaks.accent === k ? 'on' : ''}
+              style={{ background: c }}
+              onClick={() => set('accent', k)} />
+          ))}
+        </div>
+      </div>
+
+      <div className="tweak-row">
+        <div className="tweak-label">Density</div>
+        <div className="tweak-btns">
+          {['compact', 'cozy', 'roomy'].map(d => (
+            <button key={d} className={tweaks.density === d ? 'on' : ''}
+              onClick={() => set('density', d)}>{d}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="tweak-row">
+        <div className="tweak-label">RAG traffic lights</div>
+        <div className="tweak-btns">
+          <button className={tweaks.showRag ? 'on' : ''} onClick={() => set('showRag', true)}>Show</button>
+          <button className={!tweaks.showRag ? 'on' : ''} onClick={() => set('showRag', false)}>Hide</button>
+        </div>
+      </div>
+
+      <div className="tweak-row">
+        <div className="tweak-label">Focus one option</div>
+        <div className="tweak-btns">
+          {[['none', 'All'], ['broadsheet', 'Broadsheet'], ['executive', 'Executive'], ['controlroom', 'Control Room']].map(([k, l]) => (
+            <button key={k} className={tweaks.defaultFocus === k ? 'on' : ''}
+              onClick={() => set('defaultFocus', k)}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ fontSize: 10, color: '#94867a', borderTop: '1px dotted #e4ddd3', paddingTop: 8, marginTop: 10, lineHeight: 1.4 }}>
+        Pan/zoom the canvas with trackpad · Click any variation label or the ⤢ icon to open it fullscreen.
+      </div>
+    </div>
+  );
+}
+
+// Apply accent → CSS custom prop
+function useAccent(tweaks) {
+  useEffect(() => {
+    const c = ACCENT_SWATCHES[tweaks.accent]?.c || '#9b1844';
+    document.documentElement.style.setProperty('--hb-magenta', c);
+    // Derive tints
+    const hex2rgb = (h) => { const n = parseInt(h.slice(1), 16); return [n>>16&255, n>>8&255, n&255]; };
+    const [r, g, b] = hex2rgb(c);
+    const tint = (a) => `rgba(${r},${g},${b},${a})`;
+    document.documentElement.style.setProperty('--hb-magenta-10', tint(0.08));
+    document.documentElement.style.setProperty('--hb-magenta-30', tint(0.25));
+    document.documentElement.style.setProperty('--hb-magenta-60', tint(0.5));
+  }, [tweaks.accent]);
+}
+
+// Apply density → scale inside artboards via a class on root
+function useDensity(tweaks) {
+  useEffect(() => {
+    document.documentElement.dataset.density = tweaks.density;
+  }, [tweaks.density]);
+}
+
+// Hide RAG chips/dots when showRag false
+function useRagVisibility(tweaks) {
+  useEffect(() => {
+    let el = document.getElementById('rag-visibility-style');
+    if (!el) { el = document.createElement('style'); el.id = 'rag-visibility-style'; document.head.appendChild(el); }
+    el.textContent = tweaks.showRag ? '' : `
+      .rag-dot, .rag-pill { display: none !important; }
+    `;
+  }, [tweaks.showRag]);
+}
+
+// ────────────────────────────────────────────────────────────
+// Edit-mode bridge with host
+// ────────────────────────────────────────────────────────────
+function useEditMode(setOpen) {
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.data) return;
+      if (e.data.type === '__activate_edit_mode') setOpen(true);
+      else if (e.data.type === '__deactivate_edit_mode') setOpen(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+}
+
+function persistTweaks(edits) {
+  window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
+}
+
+// ────────────────────────────────────────────────────────────
+// App
+// ────────────────────────────────────────────────────────────
+function App() {
+  const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
+  const [open, setOpen] = useState(false);
+
+  useAccent(tweaks);
+  useDensity(tweaks);
+  useRagVisibility(tweaks);
+  useEditMode(setOpen);
+
+  const update = (next) => {
+    setTweaks(next);
+    // persist only the changed keys
+    persistTweaks(next);
+  };
+
+  // If defaultFocus picks one, render only that fullscreen (no canvas chrome)
+  if (tweaks.defaultFocus && tweaks.defaultFocus !== 'none') {
+    const Map = {
+      broadsheet:  window.Broadsheet,
+      executive:   window.ExecutiveBrief,
+      controlroom: window.ControlRoom,
+    };
+    const C = Map[tweaks.defaultFocus];
+    return (
+      <>
+        <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+          {C ? <C /> : <div style={{padding: 40}}>Loading…</div>}
+        </div>
+        <TweaksPanel open={open} setOpen={setOpen} tweaks={tweaks}
+          setTweaks={(fn) => update(typeof fn === 'function' ? fn(tweaks) : fn)} />
+      </>
+    );
+  }
+
+  const { DesignCanvas, DCSection, DCArtboard, DCPostIt } = window;
+
+  return (
+    <>
+      <DesignCanvas>
+        <DCSection id="intro" title="Haileybury — Management Dashboard" subtitle="Senior Leadership · v0.1 · April 2026">
+          <DCArtboard id="brief" label="Brief" width={420} height={540}>
+            <div style={{ padding: 36, fontFamily: '"Calluna Sans", Lato, sans-serif', height: '100%', display: 'flex', flexDirection: 'column', gap: 14, background: '#faf7f0' }}>
+              <img src="assets/logo-magenta.png" style={{ height: 52, width: 'auto', marginBottom: 6 }} />
+              <div style={{ borderTop: '2px solid #1a1613', borderBottom: '1px solid #1a1613', padding: '8px 0', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.14em', color: '#6e665f' }}>
+                The Governor Board · Vol. CLXIV · Apr 2026
+              </div>
+              <h1 style={{ fontFamily: '"Playfair Display", serif', fontSize: 30, fontWeight: 800, margin: '10px 0 4px', lineHeight: 1.05, letterSpacing: '-.015em' }}>
+                A one-glance view of school health.
+              </h1>
+              <p style={{ fontSize: 13.5, lineHeight: 1.55, color: '#3d3630', margin: 0 }}>
+                Three takes on the same brief: a governor-facing dashboard covering <em>admissions, academic performance, pastoral care, people & policies, co-curricular,</em> and <em>finance.</em>
+              </p>
+              <p style={{ fontSize: 13.5, lineHeight: 1.55, color: '#3d3630', margin: 0 }}>
+                All three share the same live data and filter model (house, year, boarding, gender) — they differ in how they surface it.
+              </p>
+              <div style={{ marginTop: 'auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 11.5, color: '#6e665f' }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#1a1613', fontSize: 12 }}>Try</div>
+                  Click any variation label →<br/>
+                  opens fullscreen. ← → to flip.
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#1a1613', fontSize: 12 }}>Tweak</div>
+                  Toggle the Tweaks panel<br/>
+                  for accent, density, focus.
+                </div>
+              </div>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="legend" label="Design system" width={420} height={540}>
+            <div style={{ padding: 28, fontFamily: '"Calluna Sans", Lato, sans-serif', height: '100%', background: '#faf7f0', fontSize: 12 }}>
+              <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, fontWeight: 700, letterSpacing: '-.01em', marginBottom: 14 }}>
+                Shared visual system
+              </div>
+
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: '#6e665f', fontWeight: 700, marginBottom: 6 }}>Palette</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 5, marginBottom: 16 }}>
+                {[
+                  ['#9b1844', 'Magenta'], ['#2a2b7c', 'Royal'], ['#1f7a54', 'Green'],
+                  ['#c47a1d', 'Amber'],   ['#b0233b', 'Red'],  ['#1a1613', 'Ink'],
+                ].map(([c, n]) => (
+                  <div key={c}>
+                    <div style={{ width: '100%', aspectRatio: '1/1', background: c, borderRadius: 2 }} />
+                    <div style={{ fontSize: 9, color: '#6e665f', marginTop: 3 }}>{n}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: '#6e665f', fontWeight: 700, marginBottom: 6 }}>Type</div>
+              <div style={{ borderBottom: '1px solid #e4ddd3', paddingBottom: 8, marginBottom: 10 }}>
+                <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, letterSpacing: '-.01em' }}>Playfair Display</div>
+                <div style={{ fontSize: 10, color: '#6e665f' }}>Display / titles — stand-in for Chronicle Display</div>
+              </div>
+              <div style={{ borderBottom: '1px solid #e4ddd3', paddingBottom: 8, marginBottom: 10 }}>
+                <div style={{ fontFamily: '"Calluna Sans", Lato, sans-serif', fontSize: 16, fontWeight: 700 }}>Calluna Sans</div>
+                <div style={{ fontSize: 10, color: '#6e665f' }}>Body / UI — official brand typeface</div>
+              </div>
+              <div style={{ borderBottom: '1px solid #e4ddd3', paddingBottom: 8, marginBottom: 14 }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>JetBrains Mono</div>
+                <div style={{ fontSize: 10, color: '#6e665f' }}>Numbers, codes, dates</div>
+              </div>
+
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: '#6e665f', fontWeight: 700, marginBottom: 6 }}>RAG</div>
+              <div style={{ display: 'flex', gap: 10, fontSize: 10.5 }}>
+                <span><span className="rag-dot rag-green" style={{ marginRight: 4 }} />Green · on track</span>
+                <span><span className="rag-dot rag-amber" style={{ marginRight: 4 }} />Amber · watch</span>
+                <span><span className="rag-dot rag-red" style={{ marginRight: 4 }} />Red · action</span>
+              </div>
+            </div>
+          </DCArtboard>
+
+          <DCPostIt top={260} right={-40} rotate={4} width={180}>
+            Three directions — same data, same filters. Pick the density / voice that fits how governors read.
+          </DCPostIt>
+        </DCSection>
+
+        <DCSection id="variations" title="Three directions" subtitle="Sparse → dense; sidebar → top nav → command-centre">
+          <DCArtboard id="broadsheet" label="A · Classical Broadsheet" width={1280} height={820}>
+            <BroadsheetSafe />
+          </DCArtboard>
+          <DCArtboard id="executive" label="B · Executive Brief" width={1280} height={820}>
+            <ExecutiveBriefSafe />
+          </DCArtboard>
+          <DCArtboard id="controlroom" label="C · Control Room" width={1280} height={820}>
+            <ControlRoomSafe />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="compare" title="At a glance" subtitle="What's different about each">
+          <DCArtboard id="matrix" label="Comparison" width={1280} height={380}>
+            <ComparisonMatrix />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      <TweaksPanel open={open} setOpen={setOpen} tweaks={tweaks}
+        setTweaks={(fn) => update(typeof fn === 'function' ? fn(tweaks) : fn)} />
+    </>
+  );
+}
+
+// Error-boundary wrappers so a single broken variation doesn't take the canvas down
+class SafeBoundary extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) { console.error('[Variation error]', err, info); }
+  render() {
+    if (this.state.err) {
+      return <div style={{ padding: 24, fontFamily: 'Lato, sans-serif', color: '#b0233b', fontSize: 13 }}>
+        <strong>Couldn't render this variation.</strong>
+        <pre style={{ fontSize: 10, whiteSpace: 'pre-wrap', marginTop: 8, color: '#6e665f' }}>{String(this.state.err)}</pre>
+      </div>;
+    }
+    return this.props.children;
+  }
+}
+
+const BroadsheetSafe   = () => <SafeBoundary>{window.Broadsheet    ? <window.Broadsheet />    : <em>loading…</em>}</SafeBoundary>;
+const ExecutiveBriefSafe = () => <SafeBoundary>{window.ExecutiveBrief ? <window.ExecutiveBrief /> : <em>loading…</em>}</SafeBoundary>;
+const ControlRoomSafe  = () => <SafeBoundary>{window.ControlRoom   ? <window.ControlRoom />   : <em>loading…</em>}</SafeBoundary>;
+
+function ComparisonMatrix() {
+  const rows = [
+    ['Nav',          'Left sidebar',       'Top tabs',              'Top filter bar'],
+    ['Density',      'Dense · column grid', 'Sparse · big type',    'Very dense · grid of small tiles'],
+    ['Voice',        'Broadsheet newspaper', 'Quiet & confident',   'Live-ops, data-forward'],
+    ['First screen', 'Front page (all sections)', 'Overview hero',  'Ribbon + full grid'],
+    ['Best for',     'Deep readers',       'Head / SLT morning view', 'Analyst / deputy drill-in'],
+    ['KPIs visible', '28 at once',         '10 at once',            '60+ at once'],
+  ];
+  return (
+    <div style={{ padding: '22px 32px', fontFamily: '"Calluna Sans", Lato, sans-serif', height: '100%', background: '#faf7f0', overflow: 'hidden' }}>
+      <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, letterSpacing: '-.01em', marginBottom: 14 }}>
+        Comparison matrix
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <thead>
+          <tr style={{ borderBottom: '2px solid #1a1613' }}>
+            <th style={{ textAlign: 'left', padding: '6px 10px 10px', width: '16%', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: '#6e665f' }}></th>
+            {['A · Broadsheet', 'B · Executive', 'C · Control Room'].map(h => (
+              <th key={h} style={{ textAlign: 'left', padding: '6px 10px 10px', fontFamily: '"Playfair Display", serif', fontSize: 15, fontWeight: 700, width: '28%' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid #e4ddd3' }}>
+              <td style={{ padding: '10px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: '#6e665f', fontWeight: 700 }}>{r[0]}</td>
+              {r.slice(1).map((c, j) => (
+                <td key={j} style={{ padding: '10px 10px', verticalAlign: 'top', color: '#3d3630' }}>{c}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Mount once variations register
+function waitForVariations(cb) {
+  const check = () => {
+    if (window.Broadsheet && window.ExecutiveBrief && window.ControlRoom
+        && window.DesignCanvas && window.HBY && window.DASHBOARD_DATA) cb();
+    else setTimeout(check, 30);
+  };
+  check();
+}
+
+waitForVariations(() => {
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+});
+</script>
+
+</body>
+</html>
