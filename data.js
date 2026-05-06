@@ -121,7 +121,7 @@ window.DASHBOARD_DATA = (function () {
     covenantCover: { value: 3.6, covenant: 2.5, rag: 'green', unit: 'x' },
   };
 
-  // Activity feed — mixed pan-school events
+  // Activity feed — mixed pan-school events (today)
   const feed = [
     { t: '09:42', type: 'safeguard', sev: 'amber', text: 'CPOMS referral logged — Y10 pastoral concern', by: 'J. Patel' },
     { t: '09:18', type: 'admin',     sev: 'green', text: 'Offer accepted — Y9 September intake (boarding)', by: 'Admissions' },
@@ -133,12 +133,101 @@ window.DASHBOARD_DATA = (function () {
     { t: 'Yday',  type: 'academic',  sev: 'green', text: 'Oxbridge offer #22 confirmed — History (Trinity)', by: 'UCAS Office' },
   ];
 
+  // Period-specific overrides — drives the Today/Week/Term/YTD pills.
+  // Each period defines hero-KPI deltas/notes plus its own activity feed digest.
+  const periods = {
+    today: {
+      label: 'Today',
+      heroes: {
+        onRoll:       { value: 921, delta: { value: -3,    suffix: ' v roll' },  note: '3 absent today' },
+        attendance:   { value: 96.4, delta: { value: +0.0, suffix: ' v 7d avg' }, note: 'Live · 09:30' },
+        netSurplus:   { value: '£2.5m', delta: { value: '—', suffix: '' },        note: 'Monthly view' },
+        ibPoints:     { value: 38.4, delta: { value: '—', suffix: '' },           note: 'Projected · static' },
+        oxbridge:     { value: 22,   delta: { value: '+1', suffix: ' today' },    note: 'History (Trinity)' },
+        safeguarding: { value: 99,   delta: null,                                  note: '2 staff outstanding' },
+      },
+      feed: feed,
+    },
+    week: {
+      label: 'This week',
+      heroes: {
+        onRoll:       { value: 924, delta: { value: +4,   suffix: ' v bud' },  note: '+12 v last year' },
+        attendance:   { value: 96.4, delta: { value: +0.2, suffix: ' v LY' },   note: 'Target 96.0%' },
+        netSurplus:   { value: '£2.5m', delta: { value: '+188', suffix: 'k v bud' }, note: 'Core £1.9m' },
+        ibPoints:     { value: 38.4, delta: { value: +0.6, suffix: ' v LY' },   note: 'Max 45' },
+        oxbridge:     { value: 22,   delta: { value: '+4',  suffix: ' v target' }, note: '48 applications' },
+        safeguarding: { value: 99,   delta: null,                                note: '2 staff outstanding' },
+      },
+      feed: [
+        { t: 'Mon', type: 'admin',     sev: 'green', text: '6 offers accepted — Y9 September intake', by: 'Admissions' },
+        { t: 'Mon', type: 'safeguard', sev: 'amber', text: '4 CPOMS referrals logged · 2 escalated', by: 'DSL' },
+        { t: 'Tue', type: 'academic',  sev: 'green', text: 'Mocks marked — Y13 averages up 0.4 grades', by: 'Academic Office' },
+        { t: 'Tue', type: 'finance',   sev: 'amber', text: '£40k of fees moved into arrears', by: 'Finance' },
+        { t: 'Wed', type: 'policy',    sev: 'green', text: 'Behaviour Policy v3 circulated for SLT review', by: 'Deputy Head' },
+        { t: 'Wed', type: 'admin',     sev: 'green', text: 'Sport & activities attendance hit 88% (target 85%)', by: 'Co-Curr' },
+        { t: 'Thu', type: 'safeguard', sev: 'green', text: 'All Lawrence House fire tests passed', by: 'Ops' },
+        { t: 'Thu', type: 'academic',  sev: 'green', text: '3 new Oxbridge offers — Maths, Classics, Engineering', by: 'UCAS Office' },
+        { t: 'Fri', type: 'admin',     sev: 'green', text: 'Week registration avg 96.4%', by: 'System' },
+      ],
+    },
+    term: {
+      label: 'This term',
+      heroes: {
+        onRoll:       { value: 924, delta: { value: +12,  suffix: ' v term start' }, note: 'Net +9 movements' },
+        attendance:   { value: 95.9, delta: { value: -0.5, suffix: ' v target' },     note: 'Term average' },
+        netSurplus:   { value: '£2.5m', delta: { value: '+188', suffix: 'k v bud' },   note: 'YTD core £1.9m' },
+        ibPoints:     { value: 38.1, delta: { value: +0.3, suffix: ' v term 1' },      note: 'Trending up' },
+        oxbridge:     { value: 22,   delta: { value: '+4',  suffix: ' v target' },     note: '48 applications' },
+        safeguarding: { value: 99,   delta: { value: -1,   suffix: 'pp v term 1' },    note: '2 staff outstanding' },
+      },
+      feed: [
+        { t: 'Wk 1', type: 'academic',  sev: 'green', text: 'Term opened · 924 on roll · highest in 5 yrs', by: 'Master' },
+        { t: 'Wk 2', type: 'safeguard', sev: 'amber', text: '34 CPOMS referrals logged this term', by: 'DSL' },
+        { t: 'Wk 3', type: 'finance',   sev: 'green', text: 'Fundraising hit £1.46m of £1.5m target', by: 'Development' },
+        { t: 'Wk 4', type: 'academic',  sev: 'green', text: 'Mock results — A*A*A average maintained', by: 'Academic Office' },
+        { t: 'Wk 5', type: 'policy',    sev: 'green', text: '4 policies reviewed and re-issued', by: 'Compliance' },
+        { t: 'Wk 6', type: 'admin',     sev: 'green', text: '186 sport fixtures · 62% wins', by: 'Sport' },
+      ],
+    },
+    ytd: {
+      label: 'Year to date',
+      heroes: {
+        onRoll:       { value: 924, delta: { value: +12,   suffix: ' v 24/25' },   note: '99% retention' },
+        attendance:   { value: 96.1, delta: { value: +0.4, suffix: ' v LY' },       note: '11-month average' },
+        netSurplus:   { value: '£2.5m', delta: { value: '+0.4m', suffix: ' v LY' }, note: 'YTD core £1.9m' },
+        ibPoints:     { value: 38.0, delta: { value: +0.5, suffix: ' v LY' },       note: '3-yr trend up' },
+        oxbridge:     { value: 22,   delta: { value: '+4',  suffix: ' v target' },  note: '48 applications' },
+        safeguarding: { value: 99,   delta: { value: +1,   suffix: 'pp v LY' },     note: '2 staff outstanding' },
+      },
+      feed: [
+        { t: 'Sep',  type: 'admin',     sev: 'green', text: 'Year opened with 924 on roll — record intake', by: 'Master' },
+        { t: 'Nov',  type: 'academic',  sev: 'green', text: 'Inspection visit — outstanding in 3 of 4 categories', by: 'ISI' },
+        { t: 'Jan',  type: 'finance',   sev: 'green', text: 'Mid-year forecast lifted by £188k', by: 'Bursar' },
+        { t: 'Feb',  type: 'safeguard', sev: 'amber', text: '142 CPOMS referrals YTD (vs 128 same-time LY)', by: 'DSL' },
+        { t: 'Mar',  type: 'academic',  sev: 'green', text: 'Oxbridge offers reach 22 (target 18)', by: 'UCAS Office' },
+      ],
+    },
+  };
+
+  // Sector benchmarks — surfaced when "Show benchmarks" is toggled on.
+  // Source label varies (top-25 indep avg, sector avg, ISC, IB global).
+  const benchmarks = {
+    onRoll:       { value: 880,    label: 'Top-25 indep. avg', better: 'higher' },
+    attendance:   { value: 95.2,   label: 'ISC sector avg',    better: 'higher', unit: '%' },
+    netSurplus:   { value: '£1.8m', label: 'Top-25 indep. avg', better: 'higher' },
+    ibPoints:     { value: 35.1,   label: 'IB global avg',     better: 'higher' },
+    oxbridge:     { value: 14,     label: 'Peer school avg',   better: 'higher' },
+    safeguarding: { value: 97,     label: 'ISC sector avg',    better: 'higher', unit: '%' },
+    // Cashflow benchmark line — sector EBITDA trend, £m
+    cashflow:     [1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7],
+  };
+
   // Calendar heatmap (last 28 days of incidents/flags — for density view)
   const heat28 = Array.from({length: 28}, (_,i) => Math.round(4 + Math.sin(i/3)*3 + Math.random()*6));
 
   return {
     today, termWeeks, HOUSES, YEARS,
     admissions, academic, people, pastoral, coCurricular, finance,
-    feed, heat28,
+    feed, heat28, periods, benchmarks,
   };
 })();
