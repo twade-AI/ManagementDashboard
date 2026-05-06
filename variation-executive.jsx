@@ -315,7 +315,7 @@
   };
 
   // Section-specific deep pages (reuse simpler views)
-  const SectionDeep = ({ tab }) => {
+  const SectionDeep = ({ tab, period, showBenchmarks }) => {
     const titleMap = {
       admissions: 'Admissions & Pipeline',
       academic:   'Academic Performance',
@@ -332,25 +332,42 @@
       cocurr:     CoCurrDeep,
       finance:    FinanceDeep,
     };
+    const sectionBmKey = tab; // matches D.sectionBenchmarks[tab]
+    const periodLabel = (D.periods[period] || D.periods.week).label;
     const R = rendererMap[tab];
     return (
       <div>
         <h2 className="hb-serif" style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 800, letterSpacing: '-.01em' }}>{titleMap[tab]}</h2>
-        <div style={{ fontSize: 13, color: 'var(--hb-mute)', marginBottom: 22 }}>Week 2 · Summer Term · 21 April 2026</div>
-        <R />
+        <div style={{ fontSize: 13, color: 'var(--hb-mute)', marginBottom: 22 }}>
+          {periodLabel} · 21 April 2026{showBenchmarks && <span style={{ marginLeft: 10, color: 'var(--hb-magenta)', fontWeight: 600 }}>· benchmarks on</span>}
+        </div>
+        <R period={period} showBenchmarks={showBenchmarks} sectionKey={sectionBmKey} />
       </div>
     );
   };
 
-  const AdmissionsDeep = () => {
+  // Helper: pull the i-th hero override for a section in the active period.
+  const heroAt = (sectionKey, period, i) => {
+    const arr = (D.sectionPeriods[sectionKey] && D.sectionPeriods[sectionKey][period]) || [];
+    return arr[i] || {};
+  };
+  const benchmarkAt = (sectionKey, i, on) => {
+    if (!on) return null;
+    const arr = D.sectionBenchmarks[sectionKey] || [];
+    return arr[i] || null;
+  };
+
+  const AdmissionsDeep = ({ period, showBenchmarks, sectionKey }) => {
     const a = D.admissions;
+    const h = (i) => heroAt(sectionKey, period, i);
+    const b = (i) => benchmarkAt(sectionKey, i, showBenchmarks);
     return (
       <div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 22 }}>
-          <HeroKPI label="On roll" value={a.onRoll.value} rag="green" delta={{ value: +4, suffix: ' v bud' }} />
-          <HeroKPI label="Boarding %" value={a.boardingPct.value} unit="%" rag="amber" delta={{ value: -1, suffix: '% v bud' }} accent="var(--hb-amber)" />
-          <HeroKPI label="Conversion" value={a.conversionPct.value} unit="%" rag="green" delta={{ value: +3, suffix: ' v LY' }} accent="var(--hb-green)" />
-          <HeroKPI label="Withdrawals" value={a.withdrawals.value} rag="green" delta={{ value: -2, suffix: ' v LY', invertColor: true }} />
+          <HeroKPI label="On roll"     value={h(0).value} rag="green" delta={h(0).delta} note={h(0).note} benchmark={b(0)} />
+          <HeroKPI label="Boarding %"  value={h(1).value} unit="%"   rag="amber" delta={h(1).delta} note={h(1).note} accent="var(--hb-amber)" benchmark={b(1)} />
+          <HeroKPI label="Conversion" value={h(2).value} unit="%"   rag="green" delta={h(2).delta} note={h(2).note} accent="var(--hb-green)" benchmark={b(2)} />
+          <HeroKPI label="Withdrawals" value={h(3).value} rag="green" delta={h(3).delta} note={h(3).note} benchmark={b(3)} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
           <PipelinePanel />
@@ -360,17 +377,19 @@
     );
   };
 
-  const AcademicDeep = () => {
+  const AcademicDeep = ({ period, showBenchmarks, sectionKey }) => {
     const a = D.academic;
     const atlColors = ['var(--hb-green)', 'var(--hb-magenta)', 'var(--hb-amber)', 'var(--hb-red)'];
     const atlSegs = Object.entries(a.atl.distribution).map(([k,v], i) => ({ label: k, value: v, color: atlColors[i] }));
+    const h = (i) => heroAt(sectionKey, period, i);
+    const b = (i) => benchmarkAt(sectionKey, i, showBenchmarks);
     return (
       <div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 22 }}>
-          <HeroKPI label="A-Level avg" value={a.projectedALevel.value} rag="green" note="+1 grade avg v LY" />
-          <HeroKPI label="IB points" value={a.projectedIB.value} rag="green" delta={{ value: +0.6, suffix: ' v LY' }} accent="var(--hb-royal)" />
-          <HeroKPI label="Oxbridge offers" value={a.oxbridge.offers} rag="green" delta={{ value: '+4 v target' }} />
-          <HeroKPI label="Assignment comp." value={a.assignmentCompletion.value} unit="%" rag="green" accent="var(--hb-green)" />
+          <HeroKPI label="A-Level avg"      value={h(0).value} rag="green" delta={h(0).delta} note={h(0).note} benchmark={b(0)} />
+          <HeroKPI label="IB points"        value={h(1).value} rag="green" delta={h(1).delta} note={h(1).note} accent="var(--hb-royal)" benchmark={b(1)} />
+          <HeroKPI label="Oxbridge offers"  value={h(2).value} rag="green" delta={h(2).delta} note={h(2).note} benchmark={b(2)} />
+          <HeroKPI label="Assignment comp." value={h(3).value} unit="%"   rag="green" delta={h(3).delta} note={h(3).note} accent="var(--hb-green)" benchmark={b(3)} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
           <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
@@ -412,15 +431,17 @@
     );
   };
 
-  const PastoralDeep = () => {
+  const PastoralDeep = ({ period, showBenchmarks, sectionKey }) => {
     const p = D.pastoral;
+    const h = (i) => heroAt(sectionKey, period, i);
+    const b = (i) => benchmarkAt(sectionKey, i, showBenchmarks);
     return (
       <div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 22 }}>
-          <HeroKPI label="Attendance" value={p.attendance.value} unit="%" rag="green" delta={{ value: +0.2, suffix: ' v LY' }} accent="var(--hb-green)" />
-          <HeroKPI label="CPOMS (wk)" value={p.cpoms.value} rag="amber" delta={{ value: +3, invertColor: true }} accent="var(--hb-amber)" />
-          <HeroKPI label="Counselling" value={p.counselling.value} rag="amber" note={`${p.counselling.pctOfRoll}% of roll`} accent="var(--hb-amber)" />
-          <HeroKPI label="Detentions (wk)" value={p.detentions.week} rag="amber" note={`${p.detentions.term} this term`} />
+          <HeroKPI label="Attendance" value={h(0).value} unit="%" rag="green" delta={h(0).delta} note={h(0).note} accent="var(--hb-green)" benchmark={b(0)} />
+          <HeroKPI label="CPOMS"      value={h(1).value} rag="amber" delta={h(1).delta} note={h(1).note} accent="var(--hb-amber)" benchmark={b(1)} />
+          <HeroKPI label="Counselling" value={h(2).value} rag="amber" delta={h(2).delta} note={h(2).note} accent="var(--hb-amber)" benchmark={b(2)} />
+          <HeroKPI label="Detentions" value={h(3).value} rag="amber" delta={h(3).delta} note={h(3).note} benchmark={b(3)} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
           <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
@@ -447,15 +468,17 @@
     );
   };
 
-  const PeopleDeep = () => {
+  const PeopleDeep = ({ period, showBenchmarks, sectionKey }) => {
     const p = D.people;
+    const h = (i) => heroAt(sectionKey, period, i);
+    const b = (i) => benchmarkAt(sectionKey, i, showBenchmarks);
     return (
       <div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 22 }}>
-          <HeroKPI label="SCR complete" value="100" unit="%" rag="green" accent="var(--hb-green)" />
-          <HeroKPI label="Safeguarding" value={p.safeguarding.value} unit="%" rag="amber" note="2 outstanding" accent="var(--hb-amber)" />
-          <HeroKPI label="Vacancies" value={p.vacancies.value} rag="amber" note={`${p.vacancies.teaching} teach · ${p.vacancies.operations} ops`} />
-          <HeroKPI label="Turnover" value={p.turnover.total} unit="%" rag="green" note={`sector ${p.turnover.sector}%`} />
+          <HeroKPI label="SCR complete" value={h(0).value} unit="%" rag="green" delta={h(0).delta} note={h(0).note} accent="var(--hb-green)" benchmark={b(0)} />
+          <HeroKPI label="Safeguarding" value={h(1).value} unit="%" rag="amber" delta={h(1).delta} note={h(1).note} accent="var(--hb-amber)" benchmark={b(1)} />
+          <HeroKPI label="Vacancies"    value={h(2).value} rag="amber" delta={h(2).delta} note={h(2).note} benchmark={b(2)} />
+          <HeroKPI label="Turnover"     value={h(3).value} unit="%" rag="green" delta={h(3).delta} note={h(3).note} benchmark={b(3)} />
         </div>
         <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
@@ -490,7 +513,7 @@
     );
   };
 
-  const CoCurrDeep = () => {
+  const CoCurrDeep = ({ period, showBenchmarks, sectionKey }) => {
     const c = D.coCurricular;
     const sr = c.sportsResults;
     const segs = [
@@ -498,13 +521,15 @@
       { label: 'D', value: sr.draw, color: 'var(--hb-amber)' },
       { label: 'L', value: sr.loss, color: 'var(--hb-grey)' },
     ];
+    const h = (i) => heroAt(sectionKey, period, i);
+    const b = (i) => benchmarkAt(sectionKey, i, showBenchmarks);
     return (
       <div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 22 }}>
-          <HeroKPI label="Fixtures (wk)" value={c.fixtures.week} rag="green" delta={{ value: '+5', suffix: ' v plan' }} />
-          <HeroKPI label="Win rate" value={sr.win} unit="%" rag="green" note={`${sr.fixtures} fixtures season`} accent="var(--hb-green)" />
-          <HeroKPI label="Activity att." value={c.activityAttendance.value} unit="%" rag="green" delta={{ value: +4, suffix: ' v LY' }} />
-          <HeroKPI label="Music / LAMDA" value={c.musicLamda.value} unit="%" rag="green" note={`${c.musicLamda.enrolled} enrolled`} accent="var(--hb-royal)" />
+          <HeroKPI label="Fixtures"      value={h(0).value} rag="green" delta={h(0).delta} note={h(0).note} benchmark={b(0)} />
+          <HeroKPI label="Win rate"      value={h(1).value} unit="%" rag="green" delta={h(1).delta} note={h(1).note} accent="var(--hb-green)" benchmark={b(1)} />
+          <HeroKPI label="Activity att." value={h(2).value} unit="%" rag="green" delta={h(2).delta} note={h(2).note} benchmark={b(2)} />
+          <HeroKPI label="Music / LAMDA" value={h(3).value} unit="%" rag="green" delta={h(3).delta} note={h(3).note} accent="var(--hb-royal)" benchmark={b(3)} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 20 }}>
           <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22, textAlign: 'center' }}>
@@ -541,19 +566,24 @@
     );
   };
 
-  const FinanceDeep = () => {
+  const FinanceDeep = ({ period, showBenchmarks, sectionKey }) => {
     const f = D.finance;
+    const h = (i) => heroAt(sectionKey, period, i);
+    const b = (i) => benchmarkAt(sectionKey, i, showBenchmarks);
     return (
       <div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 22 }}>
-          <HeroKPI label="Core surplus" value={`£${f.coreSurplus.value}k`} rag="green" delta={{ value: '+188', suffix: ' v bud' }} />
-          <HeroKPI label="Net surplus" value="£2.5m" rag="green" delta={{ value: '+188k v bud' }} accent="var(--hb-royal)" />
-          <HeroKPI label="Capex" value={`£${f.capex.value}k`} rag="amber" note="on plan" accent="var(--hb-amber)" />
-          <HeroKPI label="Fee arrears" value={`£${f.feeArrears.value}k`} rag="amber" delta={{ value: +40, invertColor: true }} accent="var(--hb-amber)" />
+          <HeroKPI label="Core surplus" value={h(0).value} rag="green" delta={h(0).delta} note={h(0).note} benchmark={b(0)} />
+          <HeroKPI label="Net surplus"  value={h(1).value} rag="green" delta={h(1).delta} note={h(1).note} accent="var(--hb-royal)" benchmark={b(1)} />
+          <HeroKPI label="Capex"        value={h(2).value} rag="amber" delta={h(2).delta} note={h(2).note} accent="var(--hb-amber)" benchmark={b(2)} />
+          <HeroKPI label="Fee arrears"  value={h(3).value} rag="amber" delta={h(3).delta} note={h(3).note} accent="var(--hb-amber)" benchmark={b(3)} />
         </div>
         <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 18, marginBottom: 20 }}>
-          <h3 className="hb-serif" style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700 }}>Cashflow — 12 month</h3>
-          <AreaChart actual={f.cashflowTrend} forecast={f.budgetTrend} height={110} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+            <h3 className="hb-serif" style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Cashflow — 12 month</h3>
+            {showBenchmarks && <span style={{ fontSize: 11, color: 'var(--hb-magenta)' }}>· sector overlay</span>}
+          </div>
+          <AreaChart actual={f.cashflowTrend} forecast={f.budgetTrend} benchmark={showBenchmarks ? D.benchmarks.cashflow : null} height={110} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
           <MiniStat label="EBITDA" value={`£${f.ebitda.actual}m`} sub={`bud £${f.ebitda.budget}m · fcst £${f.ebitda.forecast}m`} rag="green" />
@@ -581,7 +611,7 @@
         <div style={{ padding: '28px 36px 60px' }}>
           {tab === 'overview'
             ? <Overview setTab={setTab} period={period} showBenchmarks={showBenchmarks} />
-            : <SectionDeep tab={tab} />}
+            : <SectionDeep tab={tab} period={period} showBenchmarks={showBenchmarks} />}
         </div>
       </div>
     );
