@@ -22,13 +22,19 @@ window.DASHBOARD_DATA = (function () {
       { year: 'Y13', boys: 118, girls:  98 },
     ],
     pipeline: [
-      { stage: 'Enquiries',   count: 412, delta: +23 },
-      { stage: 'Registered',  count: 268, delta: +11 },
-      { stage: 'Assessed',    count: 194, delta:  +6 },
-      { stage: 'Offers',      count: 148, delta:  +4 },
-      { stage: 'Accepted',    count: 112, delta:  +9 },
-      { stage: 'Enrolled',    count:  96, delta:  +2 },
+      { stage: 'Enquiries',   count: 412, delta: +23, target: 400, rejected:  0 },
+      { stage: 'Registered',  count: 268, delta: +11, target: 270, rejected:  8 },
+      { stage: 'Assessed',    count: 194, delta:  +6, target: 205, rejected: 24 },
+      { stage: 'Offers',      count: 148, delta:  +4, target: 155, rejected: 46 },
+      { stage: 'Accepted',    count: 112, delta:  +9, target: 120, rejected: 53 },
+      { stage: 'Enrolled',    count:  96, delta:  +2, target: 100, rejected: 58 },
     ],
+    // Previous intake funnels — drives the "previous years" overlay on the
+    // pipeline line graph. Each array maps 1:1 to the pipeline stages above.
+    pipelineHistory: {
+      '2024/25': [389, 251, 182, 140, 104, 90],
+      '2023/24': [372, 240, 176, 132,  98, 85],
+    },
     conversionPct: { value: 41, vsLY: +3, rag: 'green', label: 'Admission conversion' },
     withdrawals:   { value:  7, vsLY: -2, rag: 'green', label: 'Admission withdrawals' },
   };
@@ -37,11 +43,31 @@ window.DASHBOARD_DATA = (function () {
   const academic = {
     projectedALevel: { value: 'A*A*A', distribution: { 'A*':42, 'A':31, 'B':18, 'C':7, 'D':2 }, vsLY: '+1 grade avg', rag: 'green' },
     projectedIB:     { value: 38.4,   avgPoints: 38.4, max: 45, vsLY: +0.6, rag: 'green' },
-    atl: { // attitude to learning
+    projectedGCSE: {
+      value: 7.2, perPupil: 10, max: 9,
+      grade9to7Pct: 68,   // % of entries graded 9–7 (strong passes)
+      grade9to4Pct: 99,   // % of entries graded 9–4 (standard pass and above)
+      distribution: { '9': 22, '8': 24, '7': 22, '6': 16, '5': 10, '4': 5, '≤3': 1 },
+      vsLY: +0.3, rag: 'green', label: 'Projected GCSE (avg of 10)',
+    },
+    atl: { // attitude to learning (whole-school legacy summary)
       distribution: { 'Outstanding': 28, 'Good': 54, 'Requires improvement': 14, 'Unsatisfactory': 4 },
       overall: 'Good',
       vsLY: +2,
       rag: 'green',
+    },
+    // Interim-report Attitude to Learning by year group, split into "in the
+    // classroom" and "outside the classroom". Each array aligns to `bands`
+    // (low → high) and sums to 100%.
+    atlReports: {
+      bands: ['Needs improvement', 'Meeting Expectations', 'Exceeding Expectations', 'Exceptional'],
+      byYear: [
+        { year: 'Y9',  inClass: [ 8, 50, 32, 10], outClass: [12, 52, 28,  8] },
+        { year: 'Y10', inClass: [10, 52, 28, 10], outClass: [14, 50, 28,  8] },
+        { year: 'Y11', inClass: [ 6, 46, 34, 14], outClass: [ 9, 48, 31, 12] },
+        { year: 'Y12', inClass: [ 5, 42, 36, 17], outClass: [ 7, 44, 34, 15] },
+        { year: 'Y13', inClass: [ 4, 40, 38, 18], outClass: [ 6, 41, 35, 18] },
+      ],
     },
     oxbridge: { offers: 22, target: 18, applications: 48, rag: 'green' },
     yellowTickets:  { value: 1847, vsLastWeek: +138, rag: 'green', label: 'Yellow tickets awarded (30d)' },
@@ -222,12 +248,215 @@ window.DASHBOARD_DATA = (function () {
     cashflow:     [1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7],
   };
 
+  // Section-level period overrides for the deep pages. Each entry maps a
+  // period to the four hero KPIs displayed on that section's deep page.
+  // Order of hero entries matches the Deep components' hero strip.
+  const sectionPeriods = {
+    admissions: {
+      today: [
+        { value: 921, delta: { value: -3,   suffix: ' v roll' },  note: '3 absent today' },
+        { value: 53,  delta: null,                                 note: 'Boarding %' },
+        { value: 41,  delta: { value: '+1', suffix: ' today' },    note: '1 new accept' },
+        { value:  0,  delta: null,                                 note: 'No withdrawals today' },
+      ],
+      week: [
+        { value: 924, delta: { value: +4,  suffix: ' v bud' }, note: '+12 v last year' },
+        { value: 53,  delta: { value: -1,  suffix: '% v bud' }, note: 'Below target 54%' },
+        { value: 41,  delta: { value: +3,  suffix: ' v LY' },   note: 'Strong wk' },
+        { value:  7,  delta: { value: -2,  suffix: ' v LY', invertColor: true }, note: 'Trending down' },
+      ],
+      term: [
+        { value: 924, delta: { value: +12, suffix: ' v term start' }, note: 'Net +9 movements' },
+        { value: 53,  delta: { value: -1,  suffix: '% v term 1' },     note: 'Watch trend' },
+        { value: 39,  delta: { value: -2,  suffix: ' v term 1' },      note: 'Term avg' },
+        { value: 18,  delta: { value: -3,  suffix: ' v term 1', invertColor: true }, note: 'Term total' },
+      ],
+      ytd: [
+        { value: 924, delta: { value: +12, suffix: ' v 24/25' },  note: '99% retention' },
+        { value: 53,  delta: { value: -2,  suffix: 'pp v LY' },   note: 'YTD' },
+        { value: 41,  delta: { value: +3,  suffix: ' v LY' },     note: 'YTD avg 41%' },
+        { value: 24,  delta: { value: -6,  suffix: ' v LY', invertColor: true }, note: '11mo total' },
+      ],
+    },
+    academic: {
+      today: [
+        { value: 'A*A*A', delta: null,                                  note: 'Unchanged today' },
+        { value: 38.4,    delta: null,                                  note: 'Static · projected' },
+        { value: 22,      delta: { value: '+1', suffix: ' today' },     note: 'New offer · History' },
+        { value: 94,      delta: { value: +0.4, suffix: ' v 7d avg' },  note: 'Live · 09:30' },
+      ],
+      week: [
+        { value: 'A*A*A', delta: null,                              note: '+1 grade avg v LY' },
+        { value: 38.4,    delta: { value: +0.6, suffix: ' v LY' },  note: 'Max 45' },
+        { value: 22,      delta: { value: '+4', suffix: ' v target' }, note: '48 applications' },
+        { value: 94,      delta: { value: +1,   suffix: 'pp v LW' },   note: 'Strong week' },
+      ],
+      term: [
+        { value: 'A*A*A', delta: { value: '+1', suffix: ' grade v term 1' }, note: 'Mocks landed' },
+        { value: 38.1,    delta: { value: +0.3, suffix: ' v term 1' },        note: 'Trending up' },
+        { value: 22,      delta: { value: '+4', suffix: ' v target' },         note: 'Term cumulative' },
+        { value: 92,      delta: { value: -1,   suffix: 'pp v term 1' },       note: 'Term avg' },
+      ],
+      ytd: [
+        { value: 'A*A*A', delta: { value: '+1', suffix: ' v LY' },  note: '3-yr trend up' },
+        { value: 38.0,    delta: { value: +0.5, suffix: ' v LY' },  note: 'Year forecast' },
+        { value: 22,      delta: { value: '+8', suffix: ' v 24/25' }, note: 'Full year' },
+        { value: 93,      delta: { value: +2,   suffix: 'pp v LY' },   note: 'YTD avg' },
+      ],
+    },
+    pastoral: {
+      today: [
+        { value: 96.4, delta: null,                                  note: 'Live · 09:30' },
+        { value: 4,    delta: { value: +1, invertColor: true },     note: 'New today' },
+        { value: 58,   delta: null,                                  note: '6.3% of roll' },
+        { value: 3,    delta: { value: -1, invertColor: true },     note: 'Today only' },
+      ],
+      week: [
+        { value: 96.4, delta: { value: +0.2, suffix: ' v LY' }, note: 'Target 96.0%' },
+        { value: 34,   delta: { value: +3, invertColor: true },  note: 'CPOMS this week' },
+        { value: 58,   delta: { value: +11, invertColor: true }, note: '6.3% of roll' },
+        { value: 41,   delta: null,                              note: '312 this term' },
+      ],
+      term: [
+        { value: 95.9, delta: { value: -0.5, suffix: ' v target' }, note: 'Term average' },
+        { value: 142,  delta: { value: +14, invertColor: true },    note: 'Term total · watch' },
+        { value: 58,   delta: { value: +9,  invertColor: true },    note: 'On caseload' },
+        { value: 312,  delta: null,                                  note: 'Term running total' },
+      ],
+      ytd: [
+        { value: 96.1, delta: { value: +0.4, suffix: ' v LY' },     note: '11-month avg' },
+        { value: 421,  delta: { value: +14, invertColor: true },    note: 'YTD vs same time LY' },
+        { value: 71,   delta: { value: +13, invertColor: true },    note: 'YTD touched' },
+        { value: 1180, delta: { value: -42, suffix: ' v LY' },      note: 'YTD total' },
+      ],
+    },
+    people: {
+      today: [
+        { value: 100, delta: null,                            note: 'No changes today' },
+        { value: 99,  delta: null,                            note: '2 outstanding' },
+        { value: 12,  delta: { value: +1, invertColor: true }, note: 'New today: 1 ops' },
+        { value: 8.2, delta: null,                            note: 'Sector 11.0%' },
+      ],
+      week: [
+        { value: 100, delta: null,                          note: 'Target 100%' },
+        { value: 99,  delta: null,                          note: '2 outstanding' },
+        { value: 12,  delta: null,                          note: '5 teach · 7 ops' },
+        { value: 8.2, delta: null,                          note: 'Sector 11.0%' },
+      ],
+      term: [
+        { value: 100, delta: null,                                  note: 'SCR maintained' },
+        { value: 98,  delta: { value: -1, suffix: 'pp v term 1', invertColor: true }, note: '4 outstanding' },
+        { value: 17,  delta: { value: +5, invertColor: true },        note: 'Term peak' },
+        { value: 7.4, delta: { value: -0.3, suffix: 'pp v term 1' },   note: 'Trending down' },
+      ],
+      ytd: [
+        { value: 100, delta: null,                                note: 'Year on target' },
+        { value: 99,  delta: { value: +1, suffix: 'pp v LY' },    note: '2 outstanding' },
+        { value: 38,  delta: null,                                note: 'YTD opened' },
+        { value: 8.2, delta: { value: -0.4, suffix: 'pp v LY' },  note: 'Improving' },
+      ],
+    },
+    cocurr: {
+      today: [
+        { value: 12,  delta: { value: '+2', suffix: ' v plan' }, note: 'Today fixtures' },
+        { value: 67,  delta: null,                                note: '3 played today' },
+        { value: 88,  delta: { value: +4, suffix: ' v LY' },      note: 'Today only' },
+        { value: 92,  delta: null,                                note: 'Live attendance' },
+      ],
+      week: [
+        { value: 48,  delta: { value: '+5', suffix: ' v plan' }, note: '186 fixtures season' },
+        { value: 62,  delta: null,                                note: '186 fixtures season' },
+        { value: 88,  delta: { value: +4, suffix: ' v LY' },      note: 'Sport & activities' },
+        { value: 92,  delta: null,                                note: '312 enrolled' },
+      ],
+      term: [
+        { value: 186, delta: { value: '+12', suffix: ' v term 1' }, note: 'Term fixtures' },
+        { value: 64,  delta: { value: +2,    suffix: 'pp v term 1' }, note: 'Term win rate' },
+        { value: 87,  delta: { value: +3,    suffix: 'pp v term 1' }, note: 'Term avg' },
+        { value: 91,  delta: { value: -1,    suffix: 'pp v term 1' }, note: '312 enrolled' },
+      ],
+      ytd: [
+        { value: 412, delta: { value: '+38', suffix: ' v LY' }, note: 'Year fixtures' },
+        { value: 65,  delta: { value: +3, suffix: 'pp v LY' },   note: 'Year win rate' },
+        { value: 88,  delta: { value: +4, suffix: ' v LY' },     note: 'YTD' },
+        { value: 91,  delta: { value: -2, suffix: 'pp v LY' },   note: '298 enrolled' },
+      ],
+    },
+    finance: {
+      today: [
+        { value: '£1.9m', delta: null,                              note: 'Forecast unchanged' },
+        { value: '£2.5m', delta: null,                              note: 'Forecast unchanged' },
+        { value: '£2.5m', delta: null,                              note: 'No spend today' },
+        { value: '£402k', delta: { value: '+£2k', invertColor: true }, note: '1 new arrear' },
+      ],
+      week: [
+        { value: '£1.9m', delta: { value: '+188', suffix: 'k v bud' }, note: 'Core surplus' },
+        { value: '£2.5m', delta: { value: '+188', suffix: 'k v bud' }, note: 'Net surplus' },
+        { value: '£2.5m', delta: null,                                  note: 'Capex on plan' },
+        { value: '£400k', delta: { value: '+40', suffix: 'k v bud', invertColor: true }, note: '3 accts > 30d' },
+      ],
+      term: [
+        { value: '£1.9m', delta: { value: '+£0.1m', suffix: ' v term 1' }, note: 'Term forecast' },
+        { value: '£2.5m', delta: { value: '+£0.1m', suffix: ' v term 1' }, note: 'Term forecast' },
+        { value: '£1.7m', delta: null,                                       note: 'Term spend' },
+        { value: '£420k', delta: { value: '+£40k', invertColor: true },      note: '4 accts > 30d' },
+      ],
+      ytd: [
+        { value: '£1.9m', delta: { value: '+£0.4m', suffix: ' v LY' }, note: 'YTD forecast' },
+        { value: '£2.5m', delta: { value: '+£0.4m', suffix: ' v LY' }, note: 'YTD forecast' },
+        { value: '£2.3m', delta: { value: -8,  suffix: '% v plan' },    note: 'Underspend' },
+        { value: '£480k', delta: { value: '+£60k', invertColor: true }, note: '6 accts > 30d' },
+      ],
+    },
+  };
+
+  // Section-level benchmarks (one per hero KPI on each Deep page).
+  // Order matches the hero strip on each Deep page.
+  const sectionBenchmarks = {
+    admissions: [
+      { value: 880,  label: 'Top-25 indep. avg' },
+      { value: 47,   label: 'Sector boarding %', unit: '%' },
+      { value: 32,   label: 'Sector conversion', unit: '%' },
+      { value: 11,   label: 'Sector avg withdrawals' },
+    ],
+    academic: [
+      { value: 'AAB',  label: 'Top-25 A-Level avg' },
+      { value: 35.1,   label: 'IB global avg' },
+      { value: 14,     label: 'Peer school avg' },
+      { value: 88,     label: 'Sector avg', unit: '%' },
+    ],
+    pastoral: [
+      { value: 95.2,   label: 'ISC sector avg', unit: '%' },
+      { value: 22,     label: 'Sector avg (wk)' },
+      { value: 4.1,    label: 'Sector avg %', unit: '% of roll' },
+      { value: 36,     label: 'Sector avg (wk)' },
+    ],
+    people: [
+      { value: 98,     label: 'ISC sector avg', unit: '%' },
+      { value: 97,     label: 'ISC sector avg', unit: '%' },
+      { value: 18,     label: 'Sector avg vacancies' },
+      { value: 11.0,   label: 'Sector turnover', unit: '%' },
+    ],
+    cocurr: [
+      { value: 32,     label: 'Sector avg (wk)' },
+      { value: 54,     label: 'Sector win rate', unit: '%' },
+      { value: 78,     label: 'Sector avg', unit: '%' },
+      { value: 81,     label: 'Sector avg', unit: '%' },
+    ],
+    finance: [
+      { value: '£1.4m', label: 'Top-25 indep. core' },
+      { value: '£1.8m', label: 'Top-25 indep. net' },
+      { value: '£2.1m', label: 'Sector avg capex' },
+      { value: '£560k', label: 'Sector avg arrears' },
+    ],
+  };
+
   // Calendar heatmap (last 28 days of incidents/flags — for density view)
   const heat28 = Array.from({length: 28}, (_,i) => Math.round(4 + Math.sin(i/3)*3 + Math.random()*6));
 
   return {
     today, termWeeks, HOUSES, YEARS,
     admissions, academic, people, pastoral, coCurricular, finance,
-    feed, heat28, periods, benchmarks,
+    feed, heat28, periods, benchmarks, sectionPeriods, sectionBenchmarks,
   };
 })();
