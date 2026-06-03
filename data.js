@@ -22,13 +22,19 @@ window.DASHBOARD_DATA = (function () {
       { year: 'Y13', boys: 118, girls:  98 },
     ],
     pipeline: [
-      { stage: 'Enquiries',   count: 412, delta: +23 },
-      { stage: 'Registered',  count: 268, delta: +11 },
-      { stage: 'Assessed',    count: 194, delta:  +6 },
-      { stage: 'Offers',      count: 148, delta:  +4 },
-      { stage: 'Accepted',    count: 112, delta:  +9 },
-      { stage: 'Enrolled',    count:  96, delta:  +2 },
+      { stage: 'Enquiries',   count: 412, delta: +23, target: 400, rejected:  0 },
+      { stage: 'Registered',  count: 268, delta: +11, target: 270, rejected:  8 },
+      { stage: 'Assessed',    count: 194, delta:  +6, target: 205, rejected: 24 },
+      { stage: 'Offers',      count: 148, delta:  +4, target: 155, rejected: 46 },
+      { stage: 'Accepted',    count: 112, delta:  +9, target: 120, rejected: 53 },
+      { stage: 'Enrolled',    count:  96, delta:  +2, target: 100, rejected: 58 },
     ],
+    // Previous intake funnels — drives the "previous years" overlay on the
+    // pipeline line graph. Each array maps 1:1 to the pipeline stages above.
+    pipelineHistory: {
+      '2024/25': [389, 251, 182, 140, 104, 90],
+      '2023/24': [372, 240, 176, 132,  98, 85],
+    },
     conversionPct: { value: 41, vsLY: +3, rag: 'green', label: 'Admission conversion' },
     withdrawals:   { value:  7, vsLY: -2, rag: 'green', label: 'Admission withdrawals' },
   };
@@ -37,11 +43,31 @@ window.DASHBOARD_DATA = (function () {
   const academic = {
     projectedALevel: { value: 'A*A*A', distribution: { 'A*':42, 'A':31, 'B':18, 'C':7, 'D':2 }, vsLY: '+1 grade avg', rag: 'green' },
     projectedIB:     { value: 38.4,   avgPoints: 38.4, max: 45, vsLY: +0.6, rag: 'green' },
-    atl: { // attitude to learning
+    projectedGCSE: {
+      value: 7.2, perPupil: 10, max: 9,
+      grade9to7Pct: 68,   // % of entries graded 9–7 (strong passes)
+      grade9to4Pct: 99,   // % of entries graded 9–4 (standard pass and above)
+      distribution: { '9': 22, '8': 24, '7': 22, '6': 16, '5': 10, '4': 5, '≤3': 1 },
+      vsLY: +0.3, rag: 'green', label: 'Projected GCSE (avg of 10)',
+    },
+    atl: { // attitude to learning (whole-school legacy summary)
       distribution: { 'Outstanding': 28, 'Good': 54, 'Requires improvement': 14, 'Unsatisfactory': 4 },
       overall: 'Good',
       vsLY: +2,
       rag: 'green',
+    },
+    // Interim-report Attitude to Learning by year group, split into "in the
+    // classroom" and "outside the classroom". Each array aligns to `bands`
+    // (low → high) and sums to 100%.
+    atlReports: {
+      bands: ['Needs improvement', 'Meeting Expectations', 'Exceeding Expectations', 'Exceptional'],
+      byYear: [
+        { year: 'Y9',  inClass: [ 8, 50, 32, 10], outClass: [12, 52, 28,  8] },
+        { year: 'Y10', inClass: [10, 52, 28, 10], outClass: [14, 50, 28,  8] },
+        { year: 'Y11', inClass: [ 6, 46, 34, 14], outClass: [ 9, 48, 31, 12] },
+        { year: 'Y12', inClass: [ 5, 42, 36, 17], outClass: [ 7, 44, 34, 15] },
+        { year: 'Y13', inClass: [ 4, 40, 38, 18], outClass: [ 6, 41, 35, 18] },
+      ],
     },
     oxbridge: { offers: 22, target: 18, applications: 48, rag: 'green' },
     yellowTickets:  { value: 1847, vsLastWeek: +138, rag: 'green', label: 'Yellow tickets awarded (30d)' },

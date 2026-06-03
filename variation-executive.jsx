@@ -268,25 +268,157 @@
     </div>
   );
 
-  const PipelinePanel = () => (
-    <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
-        <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Admissions pipeline</h3>
-        <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>Conversion <b style={{ color: 'var(--hb-green)' }}>41%</b> · LY 38%</span>
-      </div>
-      {D.admissions.pipeline.map((p, i) => {
-        const max = D.admissions.pipeline[0].count;
-        return (
+  const PipelinePanel = ({ title = 'Admissions pipeline', showRejected = false }) => {
+    const pipe = D.admissions.pipeline;
+    const max = pipe[0].count;
+    const totalRejected = pipe[pipe.length - 1].rejected;
+    return (
+      <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+          <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{title}</h3>
+          <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>Conversion <b style={{ color: 'var(--hb-green)' }}>41%</b> · LY 38%</span>
+        </div>
+        {pipe.map((p, i) => (
           <div key={p.stage} style={{ display: 'grid', gridTemplateColumns: '100px 1fr 60px 50px', gap: 10, alignItems: 'center', padding: '5px 0', fontSize: 12 }}>
             <span>{p.stage}</span>
             <HorizBar value={p.count} max={max} color="var(--hb-magenta)" height={10} />
             <span className="hb-serif" style={{ fontWeight: 700, textAlign: 'right' }}>{p.count}</span>
             <span style={{ fontSize: 10, color: 'var(--hb-green)', textAlign: 'right' }}>+{p.delta} wk</span>
           </div>
-        );
-      })}
-    </div>
+        ))}
+        {showRejected && (
+          <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 60px 50px', gap: 10, alignItems: 'center', padding: '5px 0', fontSize: 12, marginTop: 6, paddingTop: 10, borderTop: '1px solid var(--hb-rule)' }}>
+            <span style={{ color: 'var(--hb-red)' }}>Rejected</span>
+            <HorizBar value={totalRejected} max={max} color="var(--hb-red)" height={10} />
+            <span className="hb-serif" style={{ fontWeight: 700, textAlign: 'right', color: 'var(--hb-red)' }}>{totalRejected}</span>
+            <span style={{ fontSize: 10, color: 'var(--hb-mute)', textAlign: 'right' }}>cum.</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Muted line colours for previous-year overlays on the pipeline graph.
+  const PIPELINE_PREV_COLORS = ['#a99e94', '#c8aa6b'];
+
+  // Small line-swatch toggle pill used by the pipeline graph header.
+  const TogglePill = ({ on, onClick, color, label, dash }) => (
+    <button onClick={onClick} title={label} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 7,
+      border: '1px solid ' + (on ? 'var(--hb-magenta)' : 'var(--hb-rule)'),
+      background: on ? 'var(--hb-magenta-10)' : 'transparent',
+      color: on ? 'var(--hb-magenta)' : 'var(--hb-ink-2)',
+      padding: '4px 11px', borderRadius: 999, fontSize: 11, cursor: 'pointer',
+      fontFamily: 'inherit', fontWeight: 600,
+    }}>
+      <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke={on ? color : 'var(--hb-mute)'} strokeWidth="2.5" strokeDasharray={dash ? '4 3' : 'none'} strokeLinecap="round" /></svg>
+      {label}
+    </button>
   );
+
+  // Admissions pipeline as a multi-series line graph.
+  // X-axis is fixed Enquiries → Enrolled; toggles overlay rejected, targets and
+  // previous-year funnels.
+  const PipelineLineChart = ({ admissions }) => {
+    const stages   = admissions.pipeline.map(p => p.stage);
+    const current  = admissions.pipeline.map(p => p.count);
+    const targets  = admissions.pipeline.map(p => p.target);
+    const rejected = admissions.pipeline.map(p => p.rejected);
+    const history  = admissions.pipelineHistory || {};
+    const histYears = Object.keys(history);
+
+    const [showRejected, setShowRejected] = useState(true);
+    const [showTargets,  setShowTargets]  = useState(true);
+    const [showPrev,     setShowPrev]     = useState(false);
+
+    // Build the visible series stack (draw order = array order).
+    const series = [];
+    series.push({ id: 'cur', label: '2025/26 intake', color: 'var(--hb-magenta)', width: 2.75, dash: null, values: current, markers: true, valueLabels: true, area: true });
+    if (showRejected) series.push({ id: 'rej', label: 'Rejected', color: 'var(--hb-red)', width: 2, dash: '5 4', values: rejected, markers: true });
+    if (showTargets)  series.push({ id: 'tgt', label: 'Target', color: 'var(--hb-royal)', width: 1.75, dash: '3 4', values: targets });
+    if (showPrev) histYears.forEach((yr, i) => {
+      series.push({ id: yr, label: yr, color: PIPELINE_PREV_COLORS[i % PIPELINE_PREV_COLORS.length], width: 1.5, dash: null, values: history[yr], faded: true });
+    });
+
+    // Y-scale anchored at 0 with a rounded ceiling.
+    const maxV = Math.max(0, ...series.flatMap(s => s.values));
+    const roundTo = maxV > 200 ? 100 : maxV > 50 ? 25 : 10;
+    const niceMax = Math.max(roundTo, Math.ceil(maxV / roundTo) * roundTo);
+
+    const W = 960, H = 340, padL = 48, padR = 44, padT = 26, padB = 42;
+    const plotW = W - padL - padR, plotH = H - padT - padB, n = stages.length;
+    const X = i => padL + (n === 1 ? 0 : (i / (n - 1)) * plotW);
+    const Y = v => padT + plotH - (v / niceMax) * plotH;
+    const ticks = [0, 1, 2, 3, 4, 5].map(t => Math.round(niceMax * t / 5));
+
+    const linePath = vals => vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
+    const areaPath = vals => linePath(vals) + ` L${X(n - 1).toFixed(1)} ${(padT + plotH).toFixed(1)} L${X(0).toFixed(1)} ${(padT + plotH).toFixed(1)} Z`;
+
+    return (
+      <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div>
+            <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Admissions pipeline</h3>
+            <div style={{ fontSize: 11, color: 'var(--hb-mute)', marginTop: 3 }}>
+              Enquiries → Enrolled · {current[n - 1]} enrolled of {current[0]} enquiries
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <TogglePill on={showRejected} onClick={() => setShowRejected(v => !v)} color="var(--hb-red)" dash label="Rejected" />
+            <TogglePill on={showTargets} onClick={() => setShowTargets(v => !v)} color="var(--hb-royal)" dash label="Targets" />
+            <TogglePill on={showPrev} onClick={() => setShowPrev(v => !v)} color={PIPELINE_PREV_COLORS[0]} label="Previous years" />
+          </div>
+        </div>
+
+        <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
+          {/* horizontal gridlines + y-axis labels */}
+          {ticks.map((t, i) => (
+            <g key={'y' + i}>
+              <line x1={padL} x2={W - padR} y1={Y(t)} y2={Y(t)} stroke="var(--hb-rule)" strokeWidth="1" strokeDasharray={i === 0 ? 'none' : '2 4'} />
+              <text x={padL - 9} y={Y(t) + 3.5} textAnchor="end" fontSize="11" fill="var(--hb-mute)" fontFamily="var(--font-mono)">{t}</text>
+            </g>
+          ))}
+          {/* stage guides + x-axis labels */}
+          {stages.map((s, i) => (
+            <g key={'x' + s}>
+              <line x1={X(i)} x2={X(i)} y1={padT} y2={padT + plotH} stroke="var(--hb-rule)" strokeWidth="1" strokeDasharray="2 5" opacity="0.5" />
+              <text x={X(i)} y={padT + plotH + 22} textAnchor="middle" fontSize="11.5" fontWeight="600" fill="var(--hb-ink-2)" fontFamily="var(--font-sans)">{s}</text>
+            </g>
+          ))}
+          {/* subtle area under the current funnel */}
+          {series.filter(s => s.area).map(se => (
+            <path key={'a' + se.id} d={areaPath(se.values)} fill={se.color} opacity="0.06" />
+          ))}
+          {/* series lines */}
+          {series.map(se => (
+            <path key={'p' + se.id} d={linePath(se.values)} fill="none" stroke={se.color} strokeWidth={se.width}
+              strokeDasharray={se.dash || 'none'} strokeLinecap="round" strokeLinejoin="round" opacity={se.faded ? 0.55 : 1} />
+          ))}
+          {/* point markers */}
+          {series.filter(s => s.markers).map(se => (
+            <g key={'m' + se.id}>
+              {se.values.map((v, i) => <circle key={i} cx={X(i)} cy={Y(v)} r="3.5" fill="var(--hb-card)" stroke={se.color} strokeWidth="2" />)}
+            </g>
+          ))}
+          {/* value labels on the current funnel */}
+          {series.filter(s => s.valueLabels).map(se => (
+            <g key={'l' + se.id}>
+              {se.values.map((v, i) => <text key={i} x={X(i)} y={Y(v) - 10} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="var(--font-serif)" fill="var(--hb-ink)">{v}</text>)}
+            </g>
+          ))}
+        </svg>
+
+        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 8, paddingTop: 14, borderTop: '1px solid var(--hb-rule)', fontSize: 12 }}>
+          {series.map(se => (
+            <span key={'lg' + se.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--hb-ink-2)' }}>
+              <svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke={se.color} strokeWidth={se.width} strokeDasharray={se.dash || 'none'} strokeLinecap="round" opacity={se.faded ? 0.55 : 1} /></svg>
+              {se.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   // Area chart (reused)
   const AreaChart = ({ actual, forecast, benchmark, height = 160 }) => {
@@ -369,9 +501,98 @@
           <HeroKPI label="Conversion" value={h(2).value} unit="%"   rag="green" delta={h(2).delta} note={h(2).note} accent="var(--hb-green)" benchmark={b(2)} />
           <HeroKPI label="Withdrawals" value={h(3).value} rag="green" delta={h(3).delta} note={h(3).note} benchmark={b(3)} />
         </div>
+        <div style={{ marginBottom: 20 }}>
+          <PipelineLineChart admissions={a} />
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          <PipelinePanel />
+          <PipelinePanel title="Pipeline by stage" showRejected />
           <YearGenderPanel />
+        </div>
+      </div>
+    );
+  };
+
+  // Projected GCSE results — average grade across ~10 GCSEs per pupil, with the
+  // 9 → ≤3 grade spread underneath.
+  const GcsePanel = () => {
+    const g = D.academic.projectedGCSE;
+    const dist = Object.entries(g.distribution);
+    const max = Math.max(...dist.map(([, v]) => v));
+    const gradeColor = (k) =>
+      (k === '9' || k === '8' || k === '7') ? 'var(--hb-green)' :
+      (k === '6' || k === '5') ? 'var(--hb-magenta)' :
+      (k === '4') ? 'var(--hb-amber)' : 'var(--hb-red)';
+    return (
+      <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+          <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Projected GCSE results</h3>
+          <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>avg of {g.perPupil} GCSEs / pupil</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
+          <span className="hb-serif" style={{ fontSize: 46, fontWeight: 800, lineHeight: .95, color: 'var(--hb-ink)' }}>{g.value}</span>
+          <span style={{ fontSize: 13, color: 'var(--hb-mute)' }}>avg grade</span>
+          <span style={{ marginLeft: 'auto', fontSize: 12 }}><Delta value={g.vsLY} suffix=" v LY" /></span>
+        </div>
+        <div style={{ display: 'flex', gap: 18, fontSize: 11.5, color: 'var(--hb-mute)', marginBottom: 14 }}>
+          <span>Grades 9–7 <b style={{ color: 'var(--hb-green)' }}>{g.grade9to7Pct}%</b></span>
+          <span>Grades 9–4 <b style={{ color: 'var(--hb-ink-2)' }}>{g.grade9to4Pct}%</b></span>
+        </div>
+        <div style={{ paddingTop: 12, borderTop: '1px solid var(--hb-rule)' }}>
+          {dist.map(([k, v]) => (
+            <div key={k} style={{ display: 'grid', gridTemplateColumns: '54px 1fr 38px', gap: 10, alignItems: 'center', padding: '3px 0', fontSize: 12 }}>
+              <span>{k === '≤3' ? '≤ 3' : 'Grade ' + k}</span>
+              <HorizBar value={v} max={max} color={gradeColor(k)} height={9} />
+              <span className="hb-serif" style={{ fontWeight: 700, textAlign: 'right' }}>{v}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Attitude to Learning from interim reports — per year group, split into
+  // in-the-classroom vs outside-the-classroom, across the four report bands.
+  const ATL_BANDS_COLORS = ['var(--hb-red)', 'var(--hb-amber)', 'var(--hb-green)', 'var(--hb-royal)'];
+  const AtlReportsPanel = () => {
+    const r = D.academic.atlReports;
+    const colors = ATL_BANDS_COLORS;
+    const StackBar = ({ data }) => (
+      <div style={{ display: 'flex', height: 18, borderRadius: 2, overflow: 'hidden' }}>
+        {data.map((v, i) => (
+          <div key={i} title={`${r.bands[i]}: ${v}%`} style={{
+            width: `${v}%`, background: colors[i], display: 'flex', alignItems: 'center',
+            justifyContent: 'center', color: '#fff', fontSize: 9.5, fontWeight: 600,
+          }}>{v >= 12 ? v : ''}</div>
+        ))}
+      </div>
+    );
+    return (
+      <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
+          <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Attitude to Learning — interim reports</h3>
+          <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>% of pupils by year group · in vs outside the classroom</span>
+        </div>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', margin: '12px 0 16px', fontSize: 11.5 }}>
+          {r.bands.map((bnd, i) => (
+            <span key={bnd} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--hb-ink-2)' }}>
+              <span style={{ width: 11, height: 11, borderRadius: 2, background: colors[i] }} />{bnd}
+            </span>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 1fr', gap: 16, marginBottom: 6 }}>
+          <span />
+          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--hb-mute)', fontWeight: 700 }}>In the classroom</span>
+          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--hb-mute)', fontWeight: 700 }}>Outside the classroom</span>
+        </div>
+        {r.byYear.map(y => (
+          <div key={y.year} style={{ display: 'grid', gridTemplateColumns: '44px 1fr 1fr', gap: 16, alignItems: 'center', padding: '7px 0', borderTop: '1px solid var(--hb-rule)' }}>
+            <span className="hb-serif" style={{ fontWeight: 700, fontSize: 14 }}>{y.year}</span>
+            <StackBar data={y.inClass} />
+            <StackBar data={y.outClass} />
+          </div>
+        ))}
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--hb-rule)', fontSize: 11, color: 'var(--hb-mute)' }}>
+          Source: interim reports · bands: Needs improvement → Meeting → Exceeding → Exceptional
         </div>
       </div>
     );
@@ -379,8 +600,6 @@
 
   const AcademicDeep = ({ period, showBenchmarks, sectionKey }) => {
     const a = D.academic;
-    const atlColors = ['var(--hb-green)', 'var(--hb-magenta)', 'var(--hb-amber)', 'var(--hb-red)'];
-    const atlSegs = Object.entries(a.atl.distribution).map(([k,v], i) => ({ label: k, value: v, color: atlColors[i] }));
     const h = (i) => heroAt(sectionKey, period, i);
     const b = (i) => benchmarkAt(sectionKey, i, showBenchmarks);
     return (
@@ -391,21 +610,11 @@
           <HeroKPI label="Oxbridge offers"  value={h(2).value} rag="green" delta={h(2).delta} note={h(2).note} benchmark={b(2)} />
           <HeroKPI label="Assignment comp." value={h(3).value} unit="%"   rag="green" delta={h(3).delta} note={h(3).note} accent="var(--hb-green)" benchmark={b(3)} />
         </div>
+        <div style={{ marginBottom: 20 }}>
+          <AtlReportsPanel />
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
-            <h3 className="hb-serif" style={{ margin: '0 0 14px', fontSize: 18, fontWeight: 700 }}>Attitude to learning</h3>
-            <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-              <Donut segments={atlSegs} size={160} strokeWidth={28} centerLabel={a.atl.overall} centerSub="OVERALL" />
-              <div style={{ flex: 1 }}>
-                {atlSegs.map(s => (
-                  <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
-                    <span><span style={{display:'inline-block',width:10,height:10,background:s.color,marginRight:8,borderRadius:2}} />{s.label}</span>
-                    <span className="hb-serif" style={{ fontWeight: 700 }}>{s.value}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <GcsePanel />
           <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
               <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Yellow tickets & flags</h3>
