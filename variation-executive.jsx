@@ -512,10 +512,94 @@
     );
   };
 
+  // Projected GCSE results — average grade across ~10 GCSEs per pupil, with the
+  // 9 → ≤3 grade spread underneath.
+  const GcsePanel = () => {
+    const g = D.academic.projectedGCSE;
+    const dist = Object.entries(g.distribution);
+    const max = Math.max(...dist.map(([, v]) => v));
+    const gradeColor = (k) =>
+      (k === '9' || k === '8' || k === '7') ? 'var(--hb-green)' :
+      (k === '6' || k === '5') ? 'var(--hb-magenta)' :
+      (k === '4') ? 'var(--hb-amber)' : 'var(--hb-red)';
+    return (
+      <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+          <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Projected GCSE results</h3>
+          <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>avg of {g.perPupil} GCSEs / pupil</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
+          <span className="hb-serif" style={{ fontSize: 46, fontWeight: 800, lineHeight: .95, color: 'var(--hb-ink)' }}>{g.value}</span>
+          <span style={{ fontSize: 13, color: 'var(--hb-mute)' }}>avg grade</span>
+          <span style={{ marginLeft: 'auto', fontSize: 12 }}><Delta value={g.vsLY} suffix=" v LY" /></span>
+        </div>
+        <div style={{ display: 'flex', gap: 18, fontSize: 11.5, color: 'var(--hb-mute)', marginBottom: 14 }}>
+          <span>Grades 9–7 <b style={{ color: 'var(--hb-green)' }}>{g.grade9to7Pct}%</b></span>
+          <span>Grades 9–4 <b style={{ color: 'var(--hb-ink-2)' }}>{g.grade9to4Pct}%</b></span>
+        </div>
+        <div style={{ paddingTop: 12, borderTop: '1px solid var(--hb-rule)' }}>
+          {dist.map(([k, v]) => (
+            <div key={k} style={{ display: 'grid', gridTemplateColumns: '54px 1fr 38px', gap: 10, alignItems: 'center', padding: '3px 0', fontSize: 12 }}>
+              <span>{k === '≤3' ? '≤ 3' : 'Grade ' + k}</span>
+              <HorizBar value={v} max={max} color={gradeColor(k)} height={9} />
+              <span className="hb-serif" style={{ fontWeight: 700, textAlign: 'right' }}>{v}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Attitude to Learning from interim reports — per year group, split into
+  // in-the-classroom vs outside-the-classroom, across the four report bands.
+  const ATL_BANDS_COLORS = ['var(--hb-red)', 'var(--hb-amber)', 'var(--hb-green)', 'var(--hb-royal)'];
+  const AtlReportsPanel = () => {
+    const r = D.academic.atlReports;
+    const colors = ATL_BANDS_COLORS;
+    const StackBar = ({ data }) => (
+      <div style={{ display: 'flex', height: 18, borderRadius: 2, overflow: 'hidden' }}>
+        {data.map((v, i) => (
+          <div key={i} title={`${r.bands[i]}: ${v}%`} style={{
+            width: `${v}%`, background: colors[i], display: 'flex', alignItems: 'center',
+            justifyContent: 'center', color: '#fff', fontSize: 9.5, fontWeight: 600,
+          }}>{v >= 12 ? v : ''}</div>
+        ))}
+      </div>
+    );
+    return (
+      <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
+          <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Attitude to Learning — interim reports</h3>
+          <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>% of pupils by year group · in vs outside the classroom</span>
+        </div>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', margin: '12px 0 16px', fontSize: 11.5 }}>
+          {r.bands.map((bnd, i) => (
+            <span key={bnd} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--hb-ink-2)' }}>
+              <span style={{ width: 11, height: 11, borderRadius: 2, background: colors[i] }} />{bnd}
+            </span>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 1fr', gap: 16, marginBottom: 6 }}>
+          <span />
+          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--hb-mute)', fontWeight: 700 }}>In the classroom</span>
+          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--hb-mute)', fontWeight: 700 }}>Outside the classroom</span>
+        </div>
+        {r.byYear.map(y => (
+          <div key={y.year} style={{ display: 'grid', gridTemplateColumns: '44px 1fr 1fr', gap: 16, alignItems: 'center', padding: '7px 0', borderTop: '1px solid var(--hb-rule)' }}>
+            <span className="hb-serif" style={{ fontWeight: 700, fontSize: 14 }}>{y.year}</span>
+            <StackBar data={y.inClass} />
+            <StackBar data={y.outClass} />
+          </div>
+        ))}
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--hb-rule)', fontSize: 11, color: 'var(--hb-mute)' }}>
+          Source: interim reports · bands: Needs improvement → Meeting → Exceeding → Exceptional
+        </div>
+      </div>
+    );
+  };
+
   const AcademicDeep = ({ period, showBenchmarks, sectionKey }) => {
     const a = D.academic;
-    const atlColors = ['var(--hb-green)', 'var(--hb-magenta)', 'var(--hb-amber)', 'var(--hb-red)'];
-    const atlSegs = Object.entries(a.atl.distribution).map(([k,v], i) => ({ label: k, value: v, color: atlColors[i] }));
     const h = (i) => heroAt(sectionKey, period, i);
     const b = (i) => benchmarkAt(sectionKey, i, showBenchmarks);
     return (
@@ -526,21 +610,11 @@
           <HeroKPI label="Oxbridge offers"  value={h(2).value} rag="green" delta={h(2).delta} note={h(2).note} benchmark={b(2)} />
           <HeroKPI label="Assignment comp." value={h(3).value} unit="%"   rag="green" delta={h(3).delta} note={h(3).note} accent="var(--hb-green)" benchmark={b(3)} />
         </div>
+        <div style={{ marginBottom: 20 }}>
+          <AtlReportsPanel />
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
-            <h3 className="hb-serif" style={{ margin: '0 0 14px', fontSize: 18, fontWeight: 700 }}>Attitude to learning</h3>
-            <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-              <Donut segments={atlSegs} size={160} strokeWidth={28} centerLabel={a.atl.overall} centerSub="OVERALL" />
-              <div style={{ flex: 1 }}>
-                {atlSegs.map(s => (
-                  <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
-                    <span><span style={{display:'inline-block',width:10,height:10,background:s.color,marginRight:8,borderRadius:2}} />{s.label}</span>
-                    <span className="hb-serif" style={{ fontWeight: 700 }}>{s.value}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <GcsePanel />
           <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
               <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Yellow tickets & flags</h3>
