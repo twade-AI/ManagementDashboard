@@ -268,25 +268,157 @@
     </div>
   );
 
-  const PipelinePanel = () => (
-    <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
-        <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Admissions pipeline</h3>
-        <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>Conversion <b style={{ color: 'var(--hb-green)' }}>41%</b> · LY 38%</span>
-      </div>
-      {D.admissions.pipeline.map((p, i) => {
-        const max = D.admissions.pipeline[0].count;
-        return (
+  const PipelinePanel = ({ title = 'Admissions pipeline', showRejected = false }) => {
+    const pipe = D.admissions.pipeline;
+    const max = pipe[0].count;
+    const totalRejected = pipe[pipe.length - 1].rejected;
+    return (
+      <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+          <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{title}</h3>
+          <span style={{ fontSize: 11, color: 'var(--hb-mute)' }}>Conversion <b style={{ color: 'var(--hb-green)' }}>41%</b> · LY 38%</span>
+        </div>
+        {pipe.map((p, i) => (
           <div key={p.stage} style={{ display: 'grid', gridTemplateColumns: '100px 1fr 60px 50px', gap: 10, alignItems: 'center', padding: '5px 0', fontSize: 12 }}>
             <span>{p.stage}</span>
             <HorizBar value={p.count} max={max} color="var(--hb-magenta)" height={10} />
             <span className="hb-serif" style={{ fontWeight: 700, textAlign: 'right' }}>{p.count}</span>
             <span style={{ fontSize: 10, color: 'var(--hb-green)', textAlign: 'right' }}>+{p.delta} wk</span>
           </div>
-        );
-      })}
-    </div>
+        ))}
+        {showRejected && (
+          <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 60px 50px', gap: 10, alignItems: 'center', padding: '5px 0', fontSize: 12, marginTop: 6, paddingTop: 10, borderTop: '1px solid var(--hb-rule)' }}>
+            <span style={{ color: 'var(--hb-red)' }}>Rejected</span>
+            <HorizBar value={totalRejected} max={max} color="var(--hb-red)" height={10} />
+            <span className="hb-serif" style={{ fontWeight: 700, textAlign: 'right', color: 'var(--hb-red)' }}>{totalRejected}</span>
+            <span style={{ fontSize: 10, color: 'var(--hb-mute)', textAlign: 'right' }}>cum.</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Muted line colours for previous-year overlays on the pipeline graph.
+  const PIPELINE_PREV_COLORS = ['#a99e94', '#c8aa6b'];
+
+  // Small line-swatch toggle pill used by the pipeline graph header.
+  const TogglePill = ({ on, onClick, color, label, dash }) => (
+    <button onClick={onClick} title={label} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 7,
+      border: '1px solid ' + (on ? 'var(--hb-magenta)' : 'var(--hb-rule)'),
+      background: on ? 'var(--hb-magenta-10)' : 'transparent',
+      color: on ? 'var(--hb-magenta)' : 'var(--hb-ink-2)',
+      padding: '4px 11px', borderRadius: 999, fontSize: 11, cursor: 'pointer',
+      fontFamily: 'inherit', fontWeight: 600,
+    }}>
+      <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke={on ? color : 'var(--hb-mute)'} strokeWidth="2.5" strokeDasharray={dash ? '4 3' : 'none'} strokeLinecap="round" /></svg>
+      {label}
+    </button>
   );
+
+  // Admissions pipeline as a multi-series line graph.
+  // X-axis is fixed Enquiries → Enrolled; toggles overlay rejected, targets and
+  // previous-year funnels.
+  const PipelineLineChart = ({ admissions }) => {
+    const stages   = admissions.pipeline.map(p => p.stage);
+    const current  = admissions.pipeline.map(p => p.count);
+    const targets  = admissions.pipeline.map(p => p.target);
+    const rejected = admissions.pipeline.map(p => p.rejected);
+    const history  = admissions.pipelineHistory || {};
+    const histYears = Object.keys(history);
+
+    const [showRejected, setShowRejected] = useState(true);
+    const [showTargets,  setShowTargets]  = useState(true);
+    const [showPrev,     setShowPrev]     = useState(false);
+
+    // Build the visible series stack (draw order = array order).
+    const series = [];
+    series.push({ id: 'cur', label: '2025/26 intake', color: 'var(--hb-magenta)', width: 2.75, dash: null, values: current, markers: true, valueLabels: true, area: true });
+    if (showRejected) series.push({ id: 'rej', label: 'Rejected', color: 'var(--hb-red)', width: 2, dash: '5 4', values: rejected, markers: true });
+    if (showTargets)  series.push({ id: 'tgt', label: 'Target', color: 'var(--hb-royal)', width: 1.75, dash: '3 4', values: targets });
+    if (showPrev) histYears.forEach((yr, i) => {
+      series.push({ id: yr, label: yr, color: PIPELINE_PREV_COLORS[i % PIPELINE_PREV_COLORS.length], width: 1.5, dash: null, values: history[yr], faded: true });
+    });
+
+    // Y-scale anchored at 0 with a rounded ceiling.
+    const maxV = Math.max(0, ...series.flatMap(s => s.values));
+    const roundTo = maxV > 200 ? 100 : maxV > 50 ? 25 : 10;
+    const niceMax = Math.max(roundTo, Math.ceil(maxV / roundTo) * roundTo);
+
+    const W = 960, H = 340, padL = 48, padR = 44, padT = 26, padB = 42;
+    const plotW = W - padL - padR, plotH = H - padT - padB, n = stages.length;
+    const X = i => padL + (n === 1 ? 0 : (i / (n - 1)) * plotW);
+    const Y = v => padT + plotH - (v / niceMax) * plotH;
+    const ticks = [0, 1, 2, 3, 4, 5].map(t => Math.round(niceMax * t / 5));
+
+    const linePath = vals => vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
+    const areaPath = vals => linePath(vals) + ` L${X(n - 1).toFixed(1)} ${(padT + plotH).toFixed(1)} L${X(0).toFixed(1)} ${(padT + plotH).toFixed(1)} Z`;
+
+    return (
+      <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div>
+            <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Admissions pipeline</h3>
+            <div style={{ fontSize: 11, color: 'var(--hb-mute)', marginTop: 3 }}>
+              Enquiries → Enrolled · {current[n - 1]} enrolled of {current[0]} enquiries
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <TogglePill on={showRejected} onClick={() => setShowRejected(v => !v)} color="var(--hb-red)" dash label="Rejected" />
+            <TogglePill on={showTargets} onClick={() => setShowTargets(v => !v)} color="var(--hb-royal)" dash label="Targets" />
+            <TogglePill on={showPrev} onClick={() => setShowPrev(v => !v)} color={PIPELINE_PREV_COLORS[0]} label="Previous years" />
+          </div>
+        </div>
+
+        <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
+          {/* horizontal gridlines + y-axis labels */}
+          {ticks.map((t, i) => (
+            <g key={'y' + i}>
+              <line x1={padL} x2={W - padR} y1={Y(t)} y2={Y(t)} stroke="var(--hb-rule)" strokeWidth="1" strokeDasharray={i === 0 ? 'none' : '2 4'} />
+              <text x={padL - 9} y={Y(t) + 3.5} textAnchor="end" fontSize="11" fill="var(--hb-mute)" fontFamily="var(--font-mono)">{t}</text>
+            </g>
+          ))}
+          {/* stage guides + x-axis labels */}
+          {stages.map((s, i) => (
+            <g key={'x' + s}>
+              <line x1={X(i)} x2={X(i)} y1={padT} y2={padT + plotH} stroke="var(--hb-rule)" strokeWidth="1" strokeDasharray="2 5" opacity="0.5" />
+              <text x={X(i)} y={padT + plotH + 22} textAnchor="middle" fontSize="11.5" fontWeight="600" fill="var(--hb-ink-2)" fontFamily="var(--font-sans)">{s}</text>
+            </g>
+          ))}
+          {/* subtle area under the current funnel */}
+          {series.filter(s => s.area).map(se => (
+            <path key={'a' + se.id} d={areaPath(se.values)} fill={se.color} opacity="0.06" />
+          ))}
+          {/* series lines */}
+          {series.map(se => (
+            <path key={'p' + se.id} d={linePath(se.values)} fill="none" stroke={se.color} strokeWidth={se.width}
+              strokeDasharray={se.dash || 'none'} strokeLinecap="round" strokeLinejoin="round" opacity={se.faded ? 0.55 : 1} />
+          ))}
+          {/* point markers */}
+          {series.filter(s => s.markers).map(se => (
+            <g key={'m' + se.id}>
+              {se.values.map((v, i) => <circle key={i} cx={X(i)} cy={Y(v)} r="3.5" fill="var(--hb-card)" stroke={se.color} strokeWidth="2" />)}
+            </g>
+          ))}
+          {/* value labels on the current funnel */}
+          {series.filter(s => s.valueLabels).map(se => (
+            <g key={'l' + se.id}>
+              {se.values.map((v, i) => <text key={i} x={X(i)} y={Y(v) - 10} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="var(--font-serif)" fill="var(--hb-ink)">{v}</text>)}
+            </g>
+          ))}
+        </svg>
+
+        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 8, paddingTop: 14, borderTop: '1px solid var(--hb-rule)', fontSize: 12 }}>
+          {series.map(se => (
+            <span key={'lg' + se.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--hb-ink-2)' }}>
+              <svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke={se.color} strokeWidth={se.width} strokeDasharray={se.dash || 'none'} strokeLinecap="round" opacity={se.faded ? 0.55 : 1} /></svg>
+              {se.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   // Area chart (reused)
   const AreaChart = ({ actual, forecast, benchmark, height = 160 }) => {
@@ -369,8 +501,11 @@
           <HeroKPI label="Conversion" value={h(2).value} unit="%"   rag="green" delta={h(2).delta} note={h(2).note} accent="var(--hb-green)" benchmark={b(2)} />
           <HeroKPI label="Withdrawals" value={h(3).value} rag="green" delta={h(3).delta} note={h(3).note} benchmark={b(3)} />
         </div>
+        <div style={{ marginBottom: 20 }}>
+          <PipelineLineChart admissions={a} />
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          <PipelinePanel />
+          <PipelinePanel title="Pipeline by stage" showRejected />
           <YearGenderPanel />
         </div>
       </div>
