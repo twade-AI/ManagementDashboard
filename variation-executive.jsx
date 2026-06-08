@@ -316,9 +316,9 @@
     </button>
   );
 
-  // Admissions pipeline as a multi-series line graph.
+  // Admissions pipeline as a compact, interactive multi-series line graph.
   // X-axis is fixed Enquiries → Enrolled; toggles overlay rejected, targets and
-  // previous-year funnels.
+  // previous-year funnels; hovering reveals every visible series at a stage.
   const PipelineLineChart = ({ admissions }) => {
     const stages   = admissions.pipeline.map(p => p.stage);
     const current  = admissions.pipeline.map(p => p.count);
@@ -330,14 +330,15 @@
     const [showRejected, setShowRejected] = useState(true);
     const [showTargets,  setShowTargets]  = useState(true);
     const [showPrev,     setShowPrev]     = useState(false);
+    const [hover,        setHover]        = useState(null);
 
     // Build the visible series stack (draw order = array order).
     const series = [];
-    series.push({ id: 'cur', label: '2025/26 intake', color: 'var(--hb-magenta)', width: 2.75, dash: null, values: current, markers: true, valueLabels: true, area: true });
-    if (showRejected) series.push({ id: 'rej', label: 'Rejected', color: 'var(--hb-red)', width: 2, dash: '5 4', values: rejected, markers: true });
-    if (showTargets)  series.push({ id: 'tgt', label: 'Target', color: 'var(--hb-royal)', width: 1.75, dash: '3 4', values: targets });
+    series.push({ id: 'cur', label: '2025/26 intake', color: 'var(--hb-magenta)', width: 2.5, dash: null, values: current, markers: true, valueLabels: true, area: true });
+    if (showRejected) series.push({ id: 'rej', label: 'Rejected', color: 'var(--hb-red)', width: 1.85, dash: '5 4', values: rejected, markers: true });
+    if (showTargets)  series.push({ id: 'tgt', label: 'Target', color: 'var(--hb-royal)', width: 1.6, dash: '3 4', values: targets });
     if (showPrev) histYears.forEach((yr, i) => {
-      series.push({ id: yr, label: yr, color: PIPELINE_PREV_COLORS[i % PIPELINE_PREV_COLORS.length], width: 1.5, dash: null, values: history[yr], faded: true });
+      series.push({ id: yr, label: yr, color: PIPELINE_PREV_COLORS[i % PIPELINE_PREV_COLORS.length], width: 1.4, dash: null, values: history[yr], faded: true });
     });
 
     // Y-scale anchored at 0 with a rounded ceiling.
@@ -345,7 +346,7 @@
     const roundTo = maxV > 200 ? 100 : maxV > 50 ? 25 : 10;
     const niceMax = Math.max(roundTo, Math.ceil(maxV / roundTo) * roundTo);
 
-    const W = 960, H = 340, padL = 48, padR = 44, padT = 26, padB = 42;
+    const W = 960, H = 224, padL = 44, padR = 40, padT = 18, padB = 34;
     const plotW = W - padL - padR, plotH = H - padT - padB, n = stages.length;
     const X = i => padL + (n === 1 ? 0 : (i / (n - 1)) * plotW);
     const Y = v => padT + plotH - (v / niceMax) * plotH;
@@ -354,13 +355,33 @@
     const linePath = vals => vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
     const areaPath = vals => linePath(vals) + ` L${X(n - 1).toFixed(1)} ${(padT + plotH).toFixed(1)} L${X(0).toFixed(1)} ${(padT + plotH).toFixed(1)} Z`;
 
+    // Map a pointer position to the nearest stage index.
+    const onMove = (e) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      if (!r.width) return;
+      const vbx = ((e.clientX - r.left) / r.width) * W;
+      const idx = Math.round((vbx - padL) / plotW * (n - 1));
+      setHover(Math.max(0, Math.min(n - 1, idx)));
+    };
+
+    // Tooltip geometry, computed only while hovering.
+    const tip = (() => {
+      if (hover == null) return null;
+      const tw = 188, headerH = 22, rowH = 16;
+      const th = headerH + series.length * rowH + 8;
+      let tx = X(hover) + 14;
+      if (tx + tw > W - 6) tx = X(hover) - 14 - tw;
+      tx = Math.max(6, tx);
+      return { tw, th, tx, ty: padT + 6, headerH, rowH };
+    })();
+
     return (
-      <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 22 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ background: 'var(--hb-card)', border: '1px solid var(--hb-rule)', padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
           <div>
-            <h3 className="hb-serif" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Admissions pipeline</h3>
-            <div style={{ fontSize: 11, color: 'var(--hb-mute)', marginTop: 3 }}>
-              Enquiries → Enrolled · {current[n - 1]} enrolled of {current[0]} enquiries
+            <h3 className="hb-serif" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Admissions pipeline</h3>
+            <div style={{ fontSize: 11, color: 'var(--hb-mute)', marginTop: 2 }}>
+              Enquiries → Enrolled · {current[n - 1]} of {current[0]} · <span style={{ fontStyle: 'italic' }}>hover for detail</span>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -375,14 +396,14 @@
           {ticks.map((t, i) => (
             <g key={'y' + i}>
               <line x1={padL} x2={W - padR} y1={Y(t)} y2={Y(t)} stroke="var(--hb-rule)" strokeWidth="1" strokeDasharray={i === 0 ? 'none' : '2 4'} />
-              <text x={padL - 9} y={Y(t) + 3.5} textAnchor="end" fontSize="11" fill="var(--hb-mute)" fontFamily="var(--font-mono)">{t}</text>
+              <text x={padL - 8} y={Y(t) + 3.5} textAnchor="end" fontSize="10" fill="var(--hb-mute)" fontFamily="var(--font-mono)">{t}</text>
             </g>
           ))}
           {/* stage guides + x-axis labels */}
           {stages.map((s, i) => (
             <g key={'x' + s}>
-              <line x1={X(i)} x2={X(i)} y1={padT} y2={padT + plotH} stroke="var(--hb-rule)" strokeWidth="1" strokeDasharray="2 5" opacity="0.5" />
-              <text x={X(i)} y={padT + plotH + 22} textAnchor="middle" fontSize="11.5" fontWeight="600" fill="var(--hb-ink-2)" fontFamily="var(--font-sans)">{s}</text>
+              <line x1={X(i)} x2={X(i)} y1={padT} y2={padT + plotH} stroke="var(--hb-rule)" strokeWidth="1" strokeDasharray="2 5" opacity={hover === i ? 0 : 0.5} />
+              <text x={X(i)} y={padT + plotH + 20} textAnchor="middle" fontSize="11" fontWeight={hover === i ? 700 : 600} fill={hover === i ? 'var(--hb-magenta)' : 'var(--hb-ink-2)'} fontFamily="var(--font-sans)">{s}</text>
             </g>
           ))}
           {/* subtle area under the current funnel */}
@@ -397,21 +418,44 @@
           {/* point markers */}
           {series.filter(s => s.markers).map(se => (
             <g key={'m' + se.id}>
-              {se.values.map((v, i) => <circle key={i} cx={X(i)} cy={Y(v)} r="3.5" fill="var(--hb-card)" stroke={se.color} strokeWidth="2" />)}
+              {se.values.map((v, i) => <circle key={i} cx={X(i)} cy={Y(v)} r="3" fill="var(--hb-card)" stroke={se.color} strokeWidth="2" />)}
             </g>
           ))}
-          {/* value labels on the current funnel */}
+          {/* value labels on the current funnel (dim the non-hovered ones) */}
           {series.filter(s => s.valueLabels).map(se => (
             <g key={'l' + se.id}>
-              {se.values.map((v, i) => <text key={i} x={X(i)} y={Y(v) - 10} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="var(--font-serif)" fill="var(--hb-ink)">{v}</text>)}
+              {se.values.map((v, i) => <text key={i} x={X(i)} y={Y(v) - 9} textAnchor="middle" fontSize="11" fontWeight="700" fontFamily="var(--font-serif)" fill="var(--hb-ink)" opacity={hover == null || hover === i ? 1 : 0.35}>{v}</text>)}
             </g>
           ))}
+          {/* hover layer: crosshair, highlighted points and tooltip */}
+          {hover != null && tip && (
+            <g style={{ pointerEvents: 'none' }}>
+              <line x1={X(hover)} x2={X(hover)} y1={padT} y2={padT + plotH} stroke="var(--hb-ink-2)" strokeWidth="1" opacity="0.45" />
+              {series.map(se => (
+                <circle key={'hv' + se.id} cx={X(hover)} cy={Y(se.values[hover])} r="4.5" fill={se.color} stroke="var(--hb-card)" strokeWidth="2" opacity={se.faded ? 0.7 : 1} />
+              ))}
+              <rect x={tip.tx} y={tip.ty} width={tip.tw} height={tip.th} rx="5" fill="var(--hb-card)" stroke="var(--hb-rule)" strokeWidth="1" />
+              <text x={tip.tx + 10} y={tip.ty + 15} fontSize="12" fontWeight="700" fontFamily="var(--font-serif)" fill="var(--hb-ink)">{stages[hover]}</text>
+              {series.map((se, k) => {
+                const ry = tip.ty + tip.headerH + k * tip.rowH + 8;
+                return (
+                  <g key={'tr' + se.id}>
+                    <rect x={tip.tx + 10} y={ry - 7} width="9" height="9" rx="1.5" fill={se.color} opacity={se.faded ? 0.7 : 1} />
+                    <text x={tip.tx + 24} y={ry} fontSize="11" fill="var(--hb-ink-2)" fontFamily="var(--font-sans)">{se.label}</text>
+                    <text x={tip.tx + tip.tw - 10} y={ry} textAnchor="end" fontSize="11" fontWeight="700" fontFamily="var(--font-mono)" fill="var(--hb-ink)">{se.values[hover]}</text>
+                  </g>
+                );
+              })}
+            </g>
+          )}
+          {/* transparent hit area (kept last so it captures the pointer) */}
+          <rect x="0" y="0" width={W} height={H} fill="transparent" style={{ cursor: 'crosshair' }} onMouseMove={onMove} onMouseLeave={() => setHover(null)} />
         </svg>
 
-        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 8, paddingTop: 14, borderTop: '1px solid var(--hb-rule)', fontSize: 12 }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 8, paddingTop: 10, borderTop: '1px solid var(--hb-rule)', fontSize: 11.5 }}>
           {series.map(se => (
             <span key={'lg' + se.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--hb-ink-2)' }}>
-              <svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke={se.color} strokeWidth={se.width} strokeDasharray={se.dash || 'none'} strokeLinecap="round" opacity={se.faded ? 0.55 : 1} /></svg>
+              <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke={se.color} strokeWidth={se.width} strokeDasharray={se.dash || 'none'} strokeLinecap="round" opacity={se.faded ? 0.55 : 1} /></svg>
               {se.label}
             </span>
           ))}
